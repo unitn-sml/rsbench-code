@@ -1,0 +1,20 @@
+val_prop: 0.2
+test_prop: 0.3
+ood_prop: 0.3
+prop_in_distribution: 0.8
+n_samples: 20
+symbols:
+  - color_1
+  - shape_1
+  - material_1
+  - size_1
+  - color_2
+  - shape_2
+  - material_2
+  - size_2
+logic: |
+  And(
+    Eq(color_1, color_2),
+    Eq(shape_1, shape_2),
+    Eq(material_1, material_2)
+  )

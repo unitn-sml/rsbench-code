@@ -1,0 +1,19 @@
+val_prop: 0.2
+test_prop: 0.3
+num_digits: 2
+prop_in_distribution: 1
+ood_prop: 0.0
+digit_values: 
+  - 0
+  - 1
+  - 2
+symbols:
+  - a
+  - b
+logic:
+  - 2*a + b
+  - a + b
+combinations_in_distribution:
+   - "0120"
+   - "2101"
+   - "0002"

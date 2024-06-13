@@ -1,0 +1,28 @@
+{
+  "shapes": {
+      "cube": "SmoothCube_v2",
+      "star": "Star",
+      "toroid": "Toroid"
+  },
+  "colors": {
+      "red": [
+          173,
+          35,
+          35
+      ],
+      "blue": [
+          42,
+          75,
+          215
+      ]
+  },
+  "materials": {
+      "rubber": "Rubber",
+      "metal": "MyMetal"
+  },
+  "sizes": {
+      "large": 0.7,
+      "medium": 0.5,
+      "small": 0.3
+  }
+}

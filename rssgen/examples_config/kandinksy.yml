@@ -1,0 +1,65 @@
+val_prop: 0.2
+test_prop: 0.3
+n_shapes: 3
+n_figures: 3
+ood_prop: 0.3
+colors:
+  - red
+  - yellow
+  - blue
+shapes:
+  - circle
+  - square
+  - triangle
+prop_in_distribution: 0.8
+symbols:
+  - shape_1
+  - color_1
+  - shape_2
+  - color_2
+  - shape_3
+  - color_3
+logic: (Eq(color_1, color_2) & Eq(shape_1, shape_2) & Ne(shape_1, shape_3)) | (Eq(color_1, color_3) & Eq(shape_1, shape_3) & Ne(shape_1, shape_2)) | (Eq(color_2, color_3) & Eq(shape_2, shape_3) & Ne(shape_1, shape_3))
+aggregator_symbols:
+  - pattern_1
+  - pattern_2
+  - pattern_3
+sample_size: 1000
+aggregator_logic: pattern_1 & pattern_2 & pattern_3
+combinations_in_distribution:
+  - - - "red, square"
+      - "blue, square"
+      - "blue, square"
+    - - "red, square"
+      - "yellow, square"
+      - "red, square"
+    - - "blue, triangle"
+      - "yellow, circle"
+      - "yellow, circle"
+  - - - "yellow, triangle"
+      - "red, circle"
+      - "yellow, triangle"
+    - - "red, triangle"
+      - "yellow, circle"
+      - "red, triangle"
+    - - "yellow, circle"
+      - "yellow, circle"
+      - "red, square"
+  - - - "red, square"
+      - "red, square"
+      - "yellow, circle"
+    - - "blue, circle"
+      - "yellow, triangle"
+      - "yellow, circle"
+    - - "red, square"
+      - "red, square"
+      - "red, triangle"
+  - - - "blue, circle"
+      - "blue, triangle"
+      - "blue, square"
+    - - "red, triangle"
+      - "yellow, triangle"
+      - "red, circle"
+    - - "yellow, square"
+      - "blue, circle"
+      - "yellow, circle"

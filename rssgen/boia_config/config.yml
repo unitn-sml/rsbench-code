@@ -1,0 +1,126 @@
+CONFIG:
+  Cube:
+    rotation: 270
+    let_color: true
+  Cube.001:
+    rotation: 270
+    let_color: true
+  Cube.002:
+    rotation: 90
+    let_color: true
+  Cube.003:
+    rotation: 90
+    let_color: true
+  Cube.004:
+    rotation: 270
+    let_color: true
+  Cube.005:
+    rotation: 270
+    let_color: true
+  Cube.006:
+    rotation: 90
+    let_color: true
+  Cube.007:
+    rotation: 90
+    let_color: true
+  Cube.008:
+    rotation: 0
+    let_color: true
+  Cube.009:
+    rotation: 180
+    let_color: true
+  Cube.010:
+    rotation: 180
+    let_color: true
+  Cube.011:
+    rotation: 0
+    let_color: true
+  Cube.012:
+    rotation: 0
+    let_color: true
+  Cube.013:
+    rotation: 180
+    let_color: true
+  Cube.014:
+    rotation: 180
+    let_color: true
+  Cube.015:
+    rotation: 0
+    let_color: true
+  Cube.016:
+    rotation: 180
+    let_color: true
+  Cube.017:
+    rotation: 180
+    let_color: true
+  Cube.019:
+    rotation: 0
+    let_color: true
+  Cube.020:
+    rotation: 0
+    let_color: true
+  Cylinder:
+    rotation: 90
+    color: yellow
+    material: Rubber
+  Cylinder.001:
+    rotation: 90
+    color: red
+    material: Rubber
+  Cylinder.002:
+    rotation: 270
+    color: brown
+    material: Rubber
+  Cylinder.003:
+    rotation: 270
+    color: white
+    material: Rubber
+  Cone.001:
+    let_color: true
+  Cone.002:
+    let_color: true
+  Cone.003:
+    let_color: true
+  Torus:
+    let_color: true
+  Torus.001:
+    let_color: true
+  Sphere:
+    let_color: true
+    rotation: 90
+  Sphere.001:
+    let_color: true
+    rotation: 180
+  Sphere.002:
+    let_color: true
+    rotation: 270
+  Sphere.003:
+    let_color: true
+    rotation: 0
+  Icosphere:
+    let_color: true
+    rotation: 90
+  Icosphere.001:
+    let_color: true
+    rotation: 90
+  Suzanne:
+    let_color: true
+    rotation: 0
+  Suzanne.001:
+    let_color: true
+    rotation: 0
+  Suzanne.002:
+    let_color: true
+    rotation: 0
+  Suzanne.003:
+    let_color: true
+    rotation: 0
+  Suzanne.004:
+    let_color: true
+    rotation: 90
+  Suzanne.005:
+    let_color: true
+    rotation: 180
+  Suzanne.006:
+    let_color: true
+    rotation: 0
