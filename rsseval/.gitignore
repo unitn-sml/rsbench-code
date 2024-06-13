@@ -11,7 +11,6 @@ venv/
 rss/embeddings_resnet/
 *.csv
 *.pth
-*.png
 *.pdf
 *.txt
 *.sh
