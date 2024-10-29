@@ -1,6 +1,6 @@
 # RSbench
 
-This is the official codebase for "RSbench: A Benchmark Suite for Systematically Evaluating Reasoning Shortcuts", NeurIPS 2024. This suite provides tools to evaluate and generate datasets focused on Reasoning Shortcuts (RSs) .
+This is the official codebase for ["A Neuro-Symbolic Benchmark Suite for Concept Quality and Reasoning Shortcuts"](https://arxiv.org/abs/2406.10368) paper, [NeurIPS 2024](https://neurips.cc/Conferences/2024/). This suite provides tools to evaluate and generate datasets focused on [Reasoning Shortcuts (RSs)](https://arxiv.org/abs/2305.19951) .
 
 ## Content Overview
 
@@ -14,4 +14,4 @@ Each component is designed to help you systematically assess and understand RSs 
 
 ## Website
 
-For more info, go to the dedicated website: [Link to Website](https://unitn-sml.github.io/rsbench/).
+For more info, go to the dedicated website: [link](https://unitn-sml.github.io/rsbench/).
