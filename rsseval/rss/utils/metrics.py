@@ -185,6 +185,14 @@ def evaluate_metrics(
             "clipsddoia",
         ]:
             loss, ac, acc, f1 = SDDOIA_eval_tloss_cacc_acc(out_dict)
+        elif args.dataset in [
+            "xor",
+        ]:
+            loss, ac, acc, f1 = XOR_eval_tloss_cacc_acc(out_dict, concepts)
+        elif args.dataset in [
+            "mnmath",
+        ]:
+            loss, ac, acc, f1 = MNMATH_eval_tloss_cacc_acc(out_dict, concepts)
         else:
             NotImplementedError()
 
@@ -193,8 +201,6 @@ def evaluate_metrics(
             cacc += ac
             yacc += acc
             f1sc += f1
-            if cf1:
-                fcf1 += rcf1
 
     if apply_softmax:
         y_pred = softmax(y_pred, axis=1)
@@ -215,6 +221,13 @@ def evaluate_metrics(
             gs = c_true
             cs = c_pred
             p_cs = pc_pred
+        elif args.dataset in ["mnmath"]:
+            ys = (y_pred > 0.5).astype(np.float)
+            c_true = c_true.reshape(c_true.shape[0], c_true.shape[1] * c_true.shape[2], 1)
+            gs = np.split(c_true, c_true.shape[1], axis=1)
+            cs = np.split(c_pred, c_pred.shape[1], axis=1)
+            p_cs = np.split(pc_pred, pc_pred.shape[1], axis=1)
+            p_ys = y_pred
         else:
             ys = np.argmax(y_pred, axis=1)
 
@@ -280,6 +293,9 @@ def evaluate_metrics(
                 1
             )  # all the items of probabilities are considered
             p_ys = p_ys.max(axis=1)
+        
+        if args.dataset == "mnmath":
+            cs = np.expand_dims(cs, axis=1)
 
         assert gs.shape == cs.shape, f"gs: {gs.shape}, cs: {cs.shape}"
 
@@ -487,6 +503,127 @@ def SDDOIA_eval_tloss_cacc_acc(out_dict):
     f1 = f1_score(y_true.cpu().numpy(), y_pred_binary.cpu().numpy(), average="micro")
 
     return loss, cacc * 100, acc * 100, f1 * 100
+
+
+def XOR_eval_tloss_cacc_acc(out_dict, concepts):
+    """XOR evaluation
+
+    Args:
+        out_dict (Dict[str]): dictionary of outputs
+
+    Returns:
+        loss: loss
+        cacc: concept accuracy
+        acc: label accuracy
+        f1: f1 accuracy
+    """
+    reprs = out_dict["CS"]
+    L = len(reprs)
+
+    objs = torch.split(
+        reprs,
+        1,
+        dim=1,
+    )
+    g_objs = torch.split(concepts, 1, dim=1)
+
+    assert len(objs) == len(g_objs), f"{len(objs)}-{len(g_objs)}"
+
+    loss, cacc = 0, 0
+
+    for j in range(len(objs)):
+        # enconding + ground truth
+        obj_enc = objs[j].squeeze(dim=1)
+        g_obj = g_objs[j].to(torch.long).view(-1)
+
+        # evaluate loss
+        loss += torch.nn.CrossEntropyLoss()(obj_enc, g_obj)
+
+        # concept accuracy of object
+        c_pred = torch.argmax(obj_enc, dim=1)
+
+        assert (
+            c_pred.size() == g_obj.size()
+        ), f"size c_pred: {c_pred.size()}, size g_objs: {g_obj.size()}"
+
+        correct = (c_pred == g_obj).sum().item()
+        cacc += correct / len(objs[j])
+
+    y = out_dict["YS"]
+    y_true = out_dict["LABELS"].to(torch.long)
+
+    y_pred = torch.argmax(y, dim=-1)
+    assert (
+        y_pred.size() == y_true.size()
+    ), f"size c_pred: {c_pred.size()}, size g_objs: {g_obj.size()}"
+
+    acc = (y_pred.detach().cpu() == y_true.detach().cpu()).sum().item() / len(y_true)
+
+    f1 = f1_score(y_true.cpu().numpy(), y_pred.cpu().numpy(), average="macro")
+
+    return loss / len(objs), cacc / len(objs) * 100, acc * 100, f1 * 100
+
+def MNMATH_eval_tloss_cacc_acc(out_dict, concepts):
+    """XOR evaluation
+
+    Args:
+        out_dict (Dict[str]): dictionary of outputs
+
+    Returns:
+        loss: loss
+        cacc: concept accuracy
+        acc: label accuracy
+        f1: f1 accuracy
+    """
+    reprs = out_dict["CS"]
+    concepts_flat = concepts.view(concepts.size(0), concepts.size(1) * concepts.size(2), 1)
+    
+    L = len(reprs)
+
+    objs = torch.split(
+        reprs,
+        1,
+        dim=1,
+    )
+    g_objs = torch.split(concepts_flat, 1, dim=1)
+
+    assert len(objs) == len(g_objs), f"{len(objs)}-{len(g_objs)}"
+
+    loss, cacc = 0, 0
+
+    for j in range(len(objs)):
+        # enconding + ground truth
+        obj_enc = objs[j].squeeze(dim=1)
+        g_obj = g_objs[j].to(torch.long).view(-1)
+
+        # evaluate loss
+        loss += torch.nn.CrossEntropyLoss()(obj_enc, g_obj)
+
+        # concept accuracy of object
+        c_pred = torch.argmax(obj_enc, dim=1)
+
+        assert (
+            c_pred.size() == g_obj.size()
+        ), f"size c_pred: {c_pred.size()}, size g_objs: {g_obj.size()}"
+
+        correct = (c_pred == g_obj).sum().item()
+        cacc += correct / len(objs[j])
+
+    y = out_dict["YS"]
+    y_true = out_dict["LABELS"].to(torch.long)
+
+    y_pred = (y > 0.5).to(torch.long)
+
+    assert (
+        y_pred.flatten().size() == y_true.flatten().size()
+    ), f"size c_pred: {c_pred.flatten().size()}, size g_objs: {g_obj.size()}"
+
+    acc = (y_pred.flatten().detach().cpu() == y_true.flatten().detach().cpu()).sum().item() / len(y_true.flatten())
+
+    f1 = f1_score(y_true.flatten().cpu().numpy(), y_pred.flatten().cpu().numpy(), average="macro")
+
+    return loss / len(objs), cacc / len(objs) * 100, acc * 100, f1 * 100
+
 
 
 def compute_clevr_predictions(logits):

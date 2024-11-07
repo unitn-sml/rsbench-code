@@ -39,6 +39,19 @@ class PadCoinToss:
         else:
             return PadRight(self.target_width)(img)
 
+class PadRightDefine:
+    def __init__(self, pad_width):
+        self.pad_width = pad_width
+    def __call__(self, img):
+        padding = (0, 0, self.pad_width, 0)
+        return transforms.functional.pad(img, padding, fill=0)
+
+class PadLeftDefine:
+    def __init__(self, pad_width):
+        self.pad_width = pad_width
+    def __call__(self, img):
+        padding = (self.pad_width, 0, 0, 0)
+        return transforms.functional.pad(img, padding, fill=0)
 
 if __name__ == "__main__":
     target_width = 56

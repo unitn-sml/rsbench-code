@@ -954,3 +954,72 @@ def create_w_to_y():
     four_bits_or[0] = torch.tensor([1, 0])
 
     return four_bits_or
+
+def create_xor(sequence_len=0, n_digits=0, task="xor"):
+    """Build Worlds-Queries matrix"""
+    if task == "xor":
+        possible_worlds = list(product(range(n_digits), repeat=sequence_len))
+        n_worlds = len(possible_worlds)
+        n_queries = 2 # false or true
+        look_up = {i: c for i, c in zip(range(n_worlds), possible_worlds)}
+        w_q = torch.zeros(n_worlds, n_queries)  # (16, 2)
+        for w in range(n_worlds):
+            digit1, digit2, digit3, digit4 = look_up[w]
+            if (digit1 + digit2 + digit3 + digit4) % 2 == 0:
+                w_q[w, 1] = 1
+        return w_q
+    else:
+        NotImplementedError("Wrong choice")
+
+
+def create_mnmath_sum(sequence_len=0, n_digits=0, task="mnmath"):
+    """Build Worlds-Queries matrix"""
+    if task == "mnmath":
+        possible_worlds = list(product(range(n_digits), repeat=sequence_len))
+        n_worlds = len(possible_worlds)
+        n_queries = 2 # false or true
+        look_up = {i: c for i, c in zip(range(n_worlds), possible_worlds)}
+        w_q = torch.zeros(n_worlds, n_queries)  # (16, 2)
+        for w in range(n_worlds):
+            digit1, digit2, digit3, digit4 = look_up[w]
+            if (digit1 + digit2) == (digit3 + digit4):
+                w_q[w, 1] = 1
+            else:
+                w_q[w, 0] = 1
+        return w_q
+    else:
+        NotImplementedError("Wrong choice")
+
+def create_mnmath_prod(sequence_len=0, n_digits=0, task="mnmath"):
+    """Build Worlds-Queries matrix"""
+    if task == "mnmath":
+        possible_worlds = list(product(range(n_digits), repeat=sequence_len))
+        n_worlds = len(possible_worlds)
+        n_queries = 2 # false or true
+        look_up = {i: c for i, c in zip(range(n_worlds), possible_worlds)}
+        w_q = torch.zeros(n_worlds, n_queries)  # (16, 2)
+        for w in range(n_worlds):
+            digit1, digit2, digit3, digit4 = look_up[w]
+            if (digit1 * digit2) == (digit3 * digit4):
+                w_q[w, 1] = 1
+            else:
+                w_q[w, 0] = 1
+        return w_q
+    else:
+        NotImplementedError("Wrong choice")
+
+def create_mnist_and(sequence_len=0, n_digits=0, task="mnmath"):
+    """Build Worlds-Queries matrix"""
+    if task == "mnmath":
+        possible_worlds = list(product(range(2), repeat=2))
+        n_worlds = len(possible_worlds)
+        n_queries = 2 # false or true
+        look_up = {i: c for i, c in zip(range(n_worlds), possible_worlds)}
+        w_q = torch.zeros(n_worlds, n_queries)  # (16, 2)
+        for w in range(n_worlds):
+            digit1, digit2 = look_up[w]
+            if digit1 == digit2:
+                w_q[w, 1] = 1
+        return w_q
+    else:
+        NotImplementedError("Wrong choice")

@@ -165,3 +165,15 @@ def XOR_get_loader(dataset, batch_size, val_test):
     return DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last
     )
+
+def MNMATH_get_loader(dataset, batch_size, val_test):
+    if val_test:
+        drop_last = True
+        shuffle = False
+    else:
+        drop_last = True
+        shuffle = True
+
+    return DataLoader(
+        dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last
+    )

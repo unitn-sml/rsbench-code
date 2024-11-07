@@ -36,6 +36,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
             "patterns",
             "mini_patterns",
             "boia",
+            "xor",
+            "mnmath"
         ],
         help="Which operation to choose.",
     )
@@ -223,6 +225,12 @@ def add_management_args(parser: ArgumentParser) -> None:
         action="store_true",
         default=False,
         help="Used to evaluate only the loaded model",
+    )
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        default=False,
+        help="Used to non-linear probe the model",
     )
     parser.add_argument(
         "--validate",

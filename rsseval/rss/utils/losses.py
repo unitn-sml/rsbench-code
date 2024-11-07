@@ -24,13 +24,13 @@ def ADDMNIST_Classification(out_dict: dict, args):
         "mnistpcbmdpl",
         "mnistclip",
         "mnistnn",
+        "mnistcbm",
     ]:
         loss = F.nll_loss(out.log(), labels, reduction="mean")
     elif args.model in [
         "mnistsl",
         "mnistslrec",
         "mnistpcbmsl",
-        "mnistcbm",
     ]:
         loss = F.cross_entropy(out, labels, reduction="mean")
     else:
@@ -596,3 +596,245 @@ def SDDOIA_CE(out_dict: dict, args):
     losses = {"y-loss": loss.item()}
 
     return loss, losses
+
+def XOR_Classification(out_dict: dict, args):
+    """XOR classification loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    loss, losses = 0, {}
+
+    out = out_dict["YS"]
+    labels = out_dict["LABELS"].to(torch.long)
+    
+    if args.model in [
+        "xorsl",
+        "xorcbm",
+        "xornn",
+        "xordpl",
+    ]:
+        loss = F.cross_entropy(out, labels, reduction="mean")
+    else:
+        loss = torch.tensor(1e-5)
+
+    assert loss > 0, loss
+
+    losses = {"y-loss": loss.item()}
+
+    return loss, losses
+
+
+def XOR_Entropy(out_dict, args):
+    """XOR entropy loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    pCs = out_dict["pCS"]
+    p_mean = torch.mean(pCs, dim=0)
+
+    ## ADD SMALL OFFSET
+    p_mean += 1e-5
+
+    with torch.no_grad():
+        Z = torch.sum(p_mean, dim=0, keepdim=True)
+    p_mean /= Z
+
+    loss = -torch.sum(p_mean * p_mean.log()) / np.log(10) / p_mean.size(0)
+
+    losses = {"H-loss": 1 - loss}
+
+    assert (1 - loss) > -0.00001, loss
+
+    return 1 - loss, losses
+
+
+def XOR_Concept_Match(out_dict: dict, args):
+    """XOR concept match loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    reprs = out_dict["pCS"]
+    concepts = out_dict["CONCEPTS"].to(torch.long)
+
+    loss = torch.tensor(0.0, device=reprs.device)
+
+    for i, rep in enumerate(range(reprs.size(1))):
+        # Create a mask to filter out concepts with -1
+        filtered_rep = reprs[:, i]
+        filtered_concepts = concepts[:, i]
+        loss += torch.nn.NLLLoss()(filtered_rep.log(), filtered_concepts)
+
+    print("Concept supervision loss", loss.item())
+
+    losses = {"c-loss": loss.item()}
+
+    return loss, losses
+
+def XOR_Cumulative(out_dict: dict, args):
+    """Xor cumulative loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    loss, losses = XOR_Classification(out_dict, args)
+
+    mitigation = 0
+    if args.entropy:
+        loss2, losses2 = XOR_Entropy(out_dict, args)
+        mitigation += args.w_h * loss2
+        losses.update(losses2)
+    if args.c_sup > 0:
+        loss3, losses3 = XOR_Concept_Match(out_dict, args)
+        mitigation += args.w_c * loss3
+        losses.update(losses3)
+
+    return loss + args.gamma * mitigation, losses
+
+def MNMATH_Classification(out_dict: dict, args):
+    """XOR classification loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    loss, losses = 0, {}
+
+    out = out_dict["YS"]
+    labels = out_dict["LABELS"].to(torch.float)
+
+    if args.model in [
+        "mnmathnn",
+        "mnmathcbm",
+        "mnmathsl",
+        "mnmathdpl",
+    ]:
+        loss += torch.nn.BCELoss()(out, labels)
+    else:
+        loss = torch.tensor(1e-5)
+
+    assert loss > 0, loss
+
+    losses = {"y-loss": loss.item()}
+
+    return loss, losses
+
+
+def MNMATH_Entropy(out_dict, args):
+    """XOR entropy loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    pCs = out_dict["pCS"]
+    p_mean = torch.mean(pCs, dim=0)
+
+    ## ADD SMALL OFFSET
+    p_mean += 1e-5
+
+    with torch.no_grad():
+        Z = torch.sum(p_mean, dim=0, keepdim=True)
+    p_mean /= Z
+
+    loss = -torch.sum(p_mean * p_mean.log()) / np.log(10) / p_mean.size(0)
+
+    losses = {"H-loss": 1 - loss}
+
+    assert (1 - loss) > -0.00001, loss
+
+    return 1 - loss, losses
+
+
+def MNMATH_Concept_Match(out_dict: dict, args):
+    """XOR concept match loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    reprs = out_dict["pCS"]
+    concepts = out_dict["CONCEPTS"].to(torch.long)
+    concepts = concepts.view(concepts.size(0), concepts.size(1) * concepts.size(2), 1)
+
+    loss = torch.tensor(0.0, device=reprs.device)
+
+    for i, rep in enumerate(range(reprs.size(1))):
+        # Create a mask to filter out concepts with -1
+        filtered_rep = reprs[:, i]
+        filtered_concepts = concepts[:, i].squeeze(1)
+
+        specific_concepts = [0, 5, 9]
+        mask = torch.isin(filtered_concepts, torch.tensor(specific_concepts).to(filtered_concepts.device)).to(filtered_concepts.device)
+
+        filtered_concepts = filtered_concepts[mask]
+        filtered_predictions = filtered_rep[mask]
+
+        if filtered_concepts.size(0) > 0:
+            criterion = torch.nn.CrossEntropyLoss()
+            loss = criterion(filtered_predictions, filtered_concepts)
+
+    print("Concept supervision loss", loss.item())
+
+    losses = {"c-loss": loss.item()}
+
+    return loss, losses
+
+def MNMATH_Cumulative(out_dict: dict, args):
+    """Xor cumulative loss
+
+    Args:
+        out_dict: output dictionary
+        args: command line arguments
+
+    Returns:
+        loss: loss value
+        losses: losses dictionary
+    """
+    loss, losses = MNMATH_Classification(out_dict, args)
+
+    mitigation = 0
+    if args.entropy:
+        loss2, losses2 = MNMATH_Entropy(out_dict, args)
+        mitigation += args.w_h * loss2
+        losses.update(losses2)
+    if args.c_sup > 0:
+        loss3, losses3 = MNMATH_Concept_Match(out_dict, args)
+        mitigation += args.w_c * loss3
+        losses.update(losses3)
+
+    return loss + args.gamma * mitigation, losses

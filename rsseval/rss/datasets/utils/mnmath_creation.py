@@ -9,7 +9,7 @@ import joblib
 from torchvision.datasets.folder import pil_loader
 
 
-class XORDataset(torch.utils.data.Dataset):
+class MNMATHDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         base_path,
@@ -63,10 +63,11 @@ class XORDataset(torch.utils.data.Dataset):
             label = data["label"]
             concept_values = data["meta"]["concepts"]
 
-            labels = np.array(label)
+            converted_labels = [bool(l) for l in label]
+            labels = np.array(converted_labels).astype(np.long)
             self.labels.append(labels)
 
-            concepts = np.array(concept_values)
+            concepts = np.array(concept_values).astype(np.long)
             self.concepts.append(concepts)
 
         self.concepts = np.stack(self.concepts, axis=0)
@@ -96,10 +97,10 @@ class XORDataset(torch.utils.data.Dataset):
 if __name__ == "__main__":
     print("Hello World")
 
-    train_data = XORDataset("../../data/xor_out_bits", "train")
-    val_data = XORDataset("../../data/xor_out_bits", "val")
-    test_data = XORDataset("../../data/xor_out_bits", "test")
-    ood_data = XORDataset("../../data/xor_out_bits", "ood")
+    train_data = MNMATHDataset("../../data/xor_out_bits", "train")
+    val_data = MNMATHDataset("../../data/xor_out_bits", "val")
+    test_data = MNMATHDataset("../../data/xor_out_bits", "test")
+    ood_data = MNMATHDataset("../../data/xor_out_bits", "ood")
 
     img, label, concepts = train_data[0]
     print(img.shape, concepts.shape, label.shape)

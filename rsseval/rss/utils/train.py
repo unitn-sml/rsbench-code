@@ -279,6 +279,12 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
     elif "kand" in dataset:
         cs = cs.reshape(cs.shape[0], cs.shape[1] * cs.shape[2])
         cs_true = cs_true.reshape(cs_true.shape[0], cs_true.shape[1] * cs_true.shape[2])
+    elif "xor" in dataset:
+        y_true = y_true.unsqueeze(dim=1)
+        cs = cs.reshape(cs.size(0), cs.size(1) * cs.size(2))
+    elif "mnmath" in dataset:
+        cs = torch.argmax(cs, dim=2)
+        cs_true = cs_true.reshape(cs_true.size(0), cs_true.size(1) * cs_true.size(2))
 
     concatenated_tensor = (
         torch.concatenate((ys, y_true, cs, cs_true), dim=1).cpu().detach().numpy()
@@ -419,7 +425,10 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             if i % 10 == 0:
                 progress_bar(i, len(train_loader) - 9, epoch, loss.item())
 
-        y_pred = torch.argmax(ys, dim=-1)
+        if args.task == "mnmath":
+            y_pred = (ys > 0.5).to(torch.long)
+        else:
+            y_pred = torch.argmax(ys, dim=-1)
 
         if args.task == "boia":
             acc, f1 = accuracy_binary(ys, y_true)
@@ -434,11 +443,18 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             if "patterns" in args.task:
                 y_true = y_true[:, -1]  # it is the last one
 
-            acc = (
-                (y_pred.detach().cpu() == y_true.detach().cpu()).sum().item()
-                / len(y_true)
-                * 100
-            )
+            if args.task == "mnmath":
+                acc = (
+                    (y_pred.flatten().detach().cpu() == y_true.flatten().detach().cpu()).sum().item()
+                    / len(y_pred.flatten())
+                    * 100
+                )
+            else: 
+                acc = (
+                    (y_pred.detach().cpu() == y_true.detach().cpu()).sum().item()
+                    / len(y_true)
+                    * 100
+                )
 
             print(
                 "\n Train acc: ",
@@ -547,7 +563,24 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
             for key, value in cfs.items():
                 print("Concept collapse", key, 1 - compute_coverage(value))
+        
+        elif args.task == "mnmath":
+            y_labels = ["first", "second"]
+            concept_labels = [
+                ["{i}" for i in range(10) for _ in range(4)] 
+            ]
+            plot_multilabel_confusion_matrix(
+                y_true, y_pred, y_labels, "Labels", save_path="labels.png"
+            )
+            cf = plot_confusion_matrix(
+                c_true,
+                c_pred,
+                labels=dataset.get_concept_labels(),
+                title="Concepts",
+                save_path=f"concepts_{args.dataset}_{args.model}_lr_{args.lr}.png",
+            )
 
+            print("Concept collapse", 1 - compute_coverage(cf))
         else:
 
             if args.task in ["patterns", "mini_patterns"]:
@@ -601,7 +634,8 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 print("Concept collapse", 1 - compute_coverage(cf))
 
         # load best
-        model.load_state_dict(torch.load(save_path))
+        if os.path.exists(save_path):
+            model.load_state_dict(torch.load(save_path))
         # move model to cpu
         model.device = "cpu"
         model.to(model.device)

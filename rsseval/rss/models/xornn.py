@@ -1,10 +1,10 @@
-# Fully neural model for MNIST
+# Fully neural model for Kandinsky
 import torch
 from utils.args import *
 from utils.conf import get_device
 from models.utils.utils_problog import *
 from utils.losses import *
-from utils.dpl_loss import ADDMNIST_DPL
+from utils.dpl_loss import XOR_DPL
 
 
 def get_parser() -> ArgumentParser:
@@ -19,23 +19,23 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class MNISTnn(nn.Module):
-    """Fully neural MODEL FOR MNIST"""
+class XORnn(nn.Module):
+    """Fully neural MODEL FOR XOR"""
 
-    NAME = "mnistnn"
+    NAME = "xornn"
     """
-    MNIST OPERATIONS AMONG TWO DIGITS. IT WORKS ONLY IN THIS CONFIGURATION.
+    XOR
     """
 
     def __init__(
         self,
         encoder,
-        n_images=2,
+        n_images=4,
         c_split=(),
         args=None,
         model_dict=None,
-        n_facts=20,
-        nr_classes=19,
+        n_facts=2,
+        nr_classes=2,
     ):
         """Initialize method
 
@@ -52,16 +52,19 @@ class MNISTnn(nn.Module):
         Returns:
             None: This function does not return a value.
         """
-        super(MNISTnn, self).__init__()
+        super(XORnn, self).__init__()
         # how many images and explicit split of concepts
-        self.net = encoder # .to(torch.float64)
-        self.n_facts = n_facts
-        self.n_images = n_images
+        self.net = encoder
+        self.n_facts = 2
+        self.n_images = 4
         self.joint = args.joint
 
         # opt and device
         self.opt = None
+        self.n_predicates = 2
         self.device = get_device()
+
+
 
     def forward(self, x):
         """Forward method
@@ -73,28 +76,29 @@ class MNISTnn(nn.Module):
         Returns:
             out_dict: output dict
         """
-        cs = torch.zeros((x.shape[0], self.n_images, self.n_facts)).to(x.device)
+
+        # split the images
+        cs = torch.zeros((x.shape[0], self.n_images, self.n_facts)).to(
+            x.device
+        )
+
         cs[:] = -1  # set at -1, they are not computed
 
-        pCs = torch.zeros((x.shape[0], self.n_images, self.n_facts)).to(x.device)
+        preds = torch.zeros((x.shape[0], self.n_images, self.n_predicates)).to(x.device)
+        preds[:] = -1  # set at -1, they are not computed
+
+        pCs = torch.zeros((x.shape[0], self.n_images, self.n_facts)).to(
+            x.device
+        )
         pCs[:] = 1.0 / self.n_facts  # set at uniform, they are not computed
 
-        if not self.joint:
-            xs = torch.split(x, x.size(-1) // self.n_images, dim=-1)
-            preds = []
-            for i in range(self.n_images):
+        py = self.net(x)
 
-                lc = self.net(xs[i])
-                preds.append(lc)
-            py = self.net.classify(preds)
-        else:
-            py = self.net(x)
-
-        return {"CS": cs, "YS": py, "pCS": pCs}
+        return {"CS": cs, "YS": py, "pCS": pCs, "PREDS": preds}
 
     @staticmethod
     def get_loss(args):
-        """Loss function for the architecture
+        """Loss function for KandDPL
 
         Args:
             args: command line arguments
@@ -103,16 +107,12 @@ class MNISTnn(nn.Module):
             loss: loss function
 
         Raises:
-            err: NotImplementedError if the loss function is not available
+            err: NotImplementedError
         """
         if args.dataset in [
-            "addmnist",
-            "shortmnist",
-            "restrictedmnist",
-            "halfmnist",
-            "clipshortmnist",
+            "xor",
         ]:
-            return ADDMNIST_DPL(ADDMNIST_Cumulative)
+            return XOR_DPL(XOR_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")
 

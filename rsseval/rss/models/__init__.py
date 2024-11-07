@@ -47,6 +47,12 @@ def get_model(args, encoder, decoder, n_images, c_split):
         "sddoiann",
         "sddoiaclip",
         "boiann",
+        "xorcbm",
+        "xornn",
+        "xordpl",
+        "mnmathnn",
+        "mnmathcbm",
+        "mnmathdpl"
     ]:
         return names[args.model](
             encoder, n_images=n_images, c_split=c_split, args=args

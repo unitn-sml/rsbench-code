@@ -5,7 +5,7 @@ from model_wrapper import ModelWrapper
 from mydata import MyDataset
 import os
 from argparse import Namespace
-from pad import PadCoinToss
+from pad import PadCoinToss, PadLeftDefine, PadRightDefine
 from collections import OrderedDict
 from torch.utils.data import DataLoader
 
@@ -20,6 +20,8 @@ from datasets.clipshortcutmnist import CLIPSHORTMNIST
 from datasets.clipboia import CLIPBOIA
 from datasets.clipsddoia import CLIPSDDOIA
 from datasets.clipkandinsky import CLIPKandinsky
+from datasets.xor import MNLOGIC
+from datasets.mnmath import MNMATH
 from models.boiann import BOIAnn
 from models.sddoiann import SDDOIAnn
 from models.sddoiacbm import SDDOIACBM
@@ -27,15 +29,22 @@ from models.boiacbm import BoiaCBM
 from models.mnistcbm import MnistCBM
 from models.mnistnn import MNISTnn
 from models.kandnn import KANDnn
+from models.mnmathnn import MNMATHnn
+from models.xornn import XORnn
 
 
 def data_loader(base_path, dataset_name):
-    data_transforms = data_transforms = transforms.Compose([transforms.ToTensor()])
+    data_transforms = transforms.Compose([transforms.ToTensor()])
     embedding = False
 
     if dataset_name == "shortmnist":
         data_transforms = transforms.Compose(
             [PadCoinToss(56), transforms.Grayscale(), transforms.ToTensor()]
+        )
+
+    if dataset_name == "mnmath":
+        data_transforms = transforms.Compose(
+            [PadCoinToss(224), transforms.Grayscale(), transforms.ToTensor()]
         )
 
     if dataset_name in [
@@ -68,6 +77,10 @@ def validate(
     if dataset_name in ["sddoia", "clipsddoia"]:
         extract_layer = "fc2"  # conv1, conv2, conv3, conv4, conv5, conv6, fc1, fc2
     if dataset_name in ["kandinsky", "minikandinsky", "clipkandinsky"]:
+        extract_layer = "fc2"
+    if dataset_name in ["xor"]:
+        extract_layer = "fc2"
+    if dataset_name in ["mnmath"]:
         extract_layer = "fc2"
 
     model = ModelWrapper(model, [extract_layer], is_boia)
@@ -104,6 +117,10 @@ def get_model(modelname, encoder, args):
         return MnistCBM(encoder=encoder, args=args)
     if modelname.lower() == "kandnn":
         return KANDnn(encoder=encoder, args=args)
+    if modelname.lower() == "xornn":
+        return XORnn(encoder=encoder, args=args)
+    if modelname.lower() == "mnmathnn":
+        return MNMATHnn(encoder=encoder, args=args)
 
     raise NotImplementedError(f"Model {modelname} missing")
 
@@ -127,6 +144,10 @@ def get_dataset(datasetname, args):
         return CLIPSDDOIA(args)
     if datasetname.lower() == "clipboia":
         return CLIPBOIA(args)
+    if datasetname.lower() == "xor":
+        return MNLOGIC(args)
+    if datasetname.lower() == "mnmath":
+        return MNMATH(args)
 
     raise NotImplementedError(f"Dataset {datasetname} missing")
 
@@ -368,6 +389,165 @@ def sddoia_tcav_setup(full=False):
 
     return validloader, class_dict, concept_dict
 
+def xor_tcav_setup():
+    class_dict = {
+        "false": 0,
+        "true": 1
+    }
+    _, _, validloader = dataset.get_data_loaders()
+    concepts_order = [
+        "0xxx",
+        "x0xx",
+        "xx0x",
+        "xxx0",
+        "1xxx",
+        "x1xx",
+        "xx1x",
+        "xxx1"
+    ]
+
+    tmp_concept_dict = {}
+    for dirname in os.listdir("../data/xor/concepts"):
+        fullpath = os.path.join("../data/xor/concepts", dirname)
+        if os.path.isdir(fullpath):
+            for i in range(4):
+                
+                concept_name = ''
+                for j in range(i):
+                    concept_name += 'x'
+                concept_name += dirname
+                for j in range(i + 1, 4):
+                    concept_name += 'x'
+                offset_sx = 28 * i
+                offset_dx = 28 * 4 - offset_sx - 28
+                data_transforms = transforms.Compose(
+                    [PadLeftDefine(offset_sx), PadLeftDefine(offset_dx), transforms.Grayscale(), transforms.ToTensor()]
+                )
+
+                image_dataset_train = MyDataset(
+                    fullpath, transform=data_transforms, embedding=False
+                )
+                tmp_concept_dict[concept_name] = DataLoader(image_dataset_train, batch_size=1, num_workers=0)
+    concept_dict = OrderedDict()
+    for c in concepts_order:
+        concept_dict[c] = tmp_concept_dict[c]
+    return validloader, class_dict, concept_dict
+
+
+def mnmath_tcav_setup():
+    class_dict = {
+        "false": 0,
+        "true": 1
+    }
+    _, _, validloader = dataset.get_data_loaders()
+
+    concepts_order = [
+        "0xxxxxxx",
+        "x0xxxxxx",
+        "xx0xxxxx",
+        "xxx0xxxx",
+        "xxxx0xxx",
+        "xxxxx0xx",
+        "xxxxxx0x",
+        "xxxxxxx0",
+        "1xxxxxxx",
+        "x1xxxxxx",
+        "xx1xxxxx",
+        "xxx1xxxx",
+        "xxxx1xxx",
+        "xxxxx1xx",
+        "xxxxxx1x",
+        "xxxxxxx1",
+        "2xxxxxxx",
+        "x2xxxxxx",
+        "xx2xxxxx",
+        "xxx2xxxx",
+        "xxxx2xxx",
+        "xxxxx2xx",
+        "xxxxxx2x",
+        "xxxxxxx2",
+        "3xxxxxxx",
+        "x3xxxxxx",
+        "xx3xxxxx",
+        "xxx3xxxx",
+        "xxxx3xxx",
+        "xxxxx3xx",
+        "xxxxxx3x",
+        "xxxxxxx3",
+        "4xxxxxxx",
+        "x4xxxxxx",
+        "xx4xxxxx",
+        "xxx4xxxx",
+        "xxxx4xxx",
+        "xxxxx4xx",
+        "xxxxxx4x",
+        "xxxxxxx4",
+        "5xxxxxxx",
+        "x5xxxxxx",
+        "xx5xxxxx",
+        "xxx5xxxx",
+        "xxxx5xxx",
+        "xxxxx5xx",
+        "xxxxxx5x",
+        "xxxxxxx5",
+        "6xxxxxxx",
+        "x6xxxxxx",
+        "xx6xxxxx",
+        "xxx6xxxx",
+        "xxxx6xxx",
+        "xxxxx6xx",
+        "xxxxxx6x",
+        "xxxxxxx6",
+        "7xxxxxxx",
+        "x7xxxxxx",
+        "xx7xxxxx",
+        "xxx7xxxx",
+        "xxxx7xxx",
+        "xxxxx7xx",
+        "xxxxxx7x",
+        "xxxxxxx7",
+        "8xxxxxxx",
+        "x8xxxxxx",
+        "xx8xxxxx",
+        "xxx8xxxx",
+        "xxxx8xxx",
+        "xxxxx8xx",
+        "xxxxxx8x",
+        "xxxxxxx8",
+        "9xxxxxxx",
+        "x9xxxxxx",
+        "xx9xxxxx",
+        "xxx9xxxx",
+        "xxxx9xxx",
+        "xxxxx9xx",
+        "xxxxxx9x",
+        "xxxxxxx9",
+    ]
+    tmp_concept_dict = {}
+    for dirname in os.listdir("../data/concepts"):
+        fullpath = os.path.join("../data/concepts", dirname)
+        if os.path.isdir(fullpath):
+            for i in range(8):
+                concept_name = ''
+                for j in range(i):
+                    concept_name += 'x'
+                concept_name += dirname
+                for j in range(i + 1, 8):
+                    concept_name += 'x'
+
+                offset_sx = 28 * i
+                offset_dx = 28 * 8 - offset_sx - 28
+                data_transforms = transforms.Compose(
+                    [PadLeftDefine(offset_sx), PadLeftDefine(offset_dx), transforms.Grayscale(), transforms.ToTensor()]
+                )
+                image_dataset_train = MyDataset(
+                    fullpath, transform=data_transforms, embedding=False
+                )
+                tmp_concept_dict[concept_name] = DataLoader(image_dataset_train, batch_size=1, num_workers=0)
+    concept_dict = OrderedDict()
+    for c in concepts_order:
+        concept_dict[c] = tmp_concept_dict[c]
+    return validloader, class_dict, concept_dict
 
 if __name__ == "__main__":
     use_gpu = torch.cuda.is_available()
@@ -417,6 +597,10 @@ if __name__ == "__main__":
             validloader, class_dict, concept_dict = mnist_tcav_setup()
         elif args.dataset in ["boia", "clipboia"]:
             validloader, class_dict, concept_dict = boia_tcav_setup()
+        elif args.dataset in ["xor"]:
+            validloader, class_dict, concept_dict = xor_tcav_setup()
+        elif args.dataset in ["mnmath"]:
+            validloader, class_dict, concept_dict = mnmath_tcav_setup()
         elif args.dataset in ["kandinsky", "minikandinsky", "clipkandinsky"]:
             validloader, class_dict, concept_dict = kand_tcav_setup(is_clip)
         elif args.dataset in ["sddoia", "clipsddoia"]:

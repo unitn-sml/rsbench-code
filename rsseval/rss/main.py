@@ -17,6 +17,7 @@ from utils.conf import *
 import signal
 from utils.args import *
 from utils.checkpoint import save_model, create_load_ckpt
+from utils.probe import probe
 
 from argparse import Namespace
 import wandb
@@ -208,7 +209,9 @@ def main(args):
             print("\n ### Closing ###")
             quit()
 
-        if args.posthoc:
+        if args.probe:
+            probe(model, dataset, args)
+        elif args.posthoc:
             test(model, dataset, args)  # test the model if post-hoc is passed
         else:
             train(model, dataset, loss, args)  # train the model otherwise
