@@ -236,7 +236,7 @@ def KAND_Classification(out_dict: dict, args):
     final_labels = out_dict["LABELS"][:, -1].to(torch.long)
     # inter_labels = out_dict["LABELS"][:, :-1].to(torch.long)
 
-    if args.task in ["patterns", "mini_patterns"]:
+    if args.task in ["patterns"]:
         weight = torch.tensor(
             [
                 1 / 0.04938272,

@@ -35,7 +35,6 @@ def add_experiment_args(parser: ArgumentParser) -> None:
             "triangle_circle",
             "patterns",
             "mini_patterns",
-            "mini_patterns_bombazza",
             "boia",
         ],
         help="Which operation to choose.",

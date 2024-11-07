@@ -1,0 +1,2 @@
+pyeda==0.29.0
+pyapproxmc==4.1.24

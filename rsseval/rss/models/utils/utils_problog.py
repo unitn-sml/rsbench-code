@@ -393,7 +393,7 @@ def build_worlds_queries_matrix_KAND(
     and_rule[:-1] = torch.tensor([1, 0])
     and_rule[-1] = torch.tensor([0, 1])
 
-    if task == "mini_patterns_bombazza":
+    if task == "mini_patterns":
 
         or_rule = torch.zeros((2**2, 2))
         or_rule[0, 0] = 1
@@ -431,61 +431,6 @@ def build_worlds_queries_matrix_KAND(
                 w_q[w, 1] = 1
 
         return w_q, and_rule, or_rule
-
-    elif task == "mini_patterns":
-
-        and_or_rule = torch.zeros((9**n_images, 2))
-
-        possible_preds = list(product(range(9), repeat=3))
-        n_preds = len(possible_preds)
-
-        preds = {i: c for i, c in zip(range(n_preds), possible_preds)}
-        for p in range(n_preds):
-            im1, im2, im3 = preds[p]
-
-            ch1 = im1 % 3
-            ch2 = im2 % 3
-            ch3 = im3 % 3
-
-            sh1 = (im1) // 3
-            sh2 = (im2) // 3
-            sh3 = (im3) // 3
-
-            same_shapes = (sh1 == sh2) and (sh1 == sh3)
-            same_colors = (ch1 == ch2) and (ch1 == ch3)
-
-            if same_shapes or same_colors:
-                and_or_rule[p, 1] = 1
-            else:
-                and_or_rule[p, 0] = 1
-
-        possible_worlds = list(product(range(n_poss), repeat=n_concepts))
-        n_worlds = len(possible_worlds)
-
-        n_queries = 9
-
-        look_up = {i: c for i, c in zip(range(n_worlds), possible_worlds)}
-        w_q = torch.zeros(n_worlds, n_queries)  # (3^6, 9)
-        for w in range(n_worlds):
-            s1, s2, s3, c1, c2, c3 = look_up[w]
-
-            same_s = (s1 == s2) and (s1 == s3)
-            diff_s = (s1 != s2) and (s1 != s3) and (s2 != s3)
-            pair_s = not same_s and not diff_s
-
-            shapes = np.array([diff_s, pair_s, same_s])
-
-            same_c = (c1 == c2) and (c1 == c3)
-            diff_c = (c1 != c2) and (c1 != c3) and (c2 != c3)
-            pair_c = not same_c and not diff_c
-
-            colors = np.array([diff_c, pair_c, same_c])
-
-            y = 3 * np.argmax(shapes) + np.argmax(colors)
-
-            w_q[w, y] = 1
-
-        return w_q, and_or_rule
 
     elif task == "patterns":
 

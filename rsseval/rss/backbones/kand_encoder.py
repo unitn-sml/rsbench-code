@@ -96,13 +96,25 @@ class TripleCNNEncoder(nn.Module):
 class TripleMLP(nn.Module):
     NAME = "TripleMLP"
 
-    def __init__(self, img_channels=3, latent_dim=6, img_concept_size=28):
+    def __init__(
+        self,
+        img_channels=3,
+        hidden_channels=32,
+        img_concept_size=28,
+        latent_dim=8,
+        label_dim=20,
+        dropout=0.5,
+    ):
         super(TripleMLP, self).__init__()
 
         self.img_concept_size = img_concept_size
+        self.channels = 3
         self.img_channels = img_channels
+        self.hidden_channels = hidden_channels
         self.latent_dim = latent_dim
+        self.label_dim = label_dim
         self.return_simple_concepts = False
+        self.unflatten_dim = (3, 7)
 
         self.backbone = torch.nn.Sequential(
             nn.Flatten(),
@@ -117,14 +129,6 @@ class TripleMLP(nn.Module):
             nn.ReLU(),
             nn.Linear(in_features=128, out_features=self.latent_dim),
         )
-
-        # for layer in self.backbone:
-        #     self.weights_init(layer)
-
-    def weights_init(self, layer):
-        if isinstance(layer, nn.Linear):
-            torch.nn.init.xavier_normal_(layer.weight)
-            torch.nn.init.normal_(layer.bias)
 
     def forward(self, x):
         xs = torch.split(x, self.img_concept_size, dim=-1)
@@ -142,9 +146,21 @@ class TripleMLP(nn.Module):
             return logits
 
         for i in range(3):
-            vars = self.backbone(xs[i])
+            vars = torch.stack(torch.split(self.backbone(xs[i]), 3, dim=-1))
             logits.append(vars)
 
-        logits = torch.cat(logits, dim=-1)
+        logits = torch.stack(logits)
 
-        return logits, 0
+        for i in range(3):
+            if i == 0:
+                preds = logits[i]
+            else:
+                preds = torch.cat((preds, logits[i]), dim=-1)
+
+        for i in range(2):
+            if i == 0:
+                c_preds = preds[i]
+            else:
+                c_preds = torch.cat((c_preds, preds[i]), dim=-1)
+
+        return c_preds, 0

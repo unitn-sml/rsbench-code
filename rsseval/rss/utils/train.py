@@ -550,7 +550,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
         else:
 
-            if args.task in ["patterns", "mini_patterns", "mini_patterns_bombazza"]:
+            if args.task in ["patterns", "mini_patterns"]:
                 # the last one is the groundtruth on the final prediction
                 y_true = y_true[:, -1]
 
@@ -562,7 +562,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 save_path=f"labels_{args.dataset}_{args.model}_lr_{args.lr}.png",
             )
 
-            if args.task in ["patterns", "mini_patterns", "mini_patterns_bombazza"]:
+            if args.task in ["patterns", "mini_patterns"]:
                 t_shapes = c_true[:, :3].reshape(-1)
                 p_shapes = c_pred[:, :3].reshape(-1)
                 t_colors = c_true[:, 3:6].reshape(-1)
