@@ -12,17 +12,17 @@ from torch.utils.data import DataLoader
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 from datasets.boia import BOIA
-from datasets.miniboia import MINIBOIA
+from datasets.sddoia import SDDOIA
 from datasets.minikandinsky import MiniKandinsky
 from datasets.kandinsky import Kandinsky
 from datasets.shortcutmnist import SHORTMNIST
 from datasets.clipshortcutmnist import CLIPSHORTMNIST
 from datasets.clipboia import CLIPBOIA
-from datasets.clipminiboia import CLIPMiniboia
+from datasets.clipsddoia import CLIPSDDOIA
 from datasets.clipkandinsky import CLIPKandinsky
 from models.boiann import BOIAnn
-from models.miniboiann import MiniBOIAnn
-from models.miniboiacbm import MiniBoiaCBM
+from models.sddoiann import SDDOIAnn
+from models.sddoiacbm import SDDOIACBM
 from models.boiacbm import BoiaCBM
 from models.mnistcbm import MnistCBM
 from models.mnistnn import MNISTnn
@@ -41,7 +41,7 @@ def data_loader(base_path, dataset_name):
     if dataset_name in [
         "boia",
         "clipshortmnist",
-        "clipminiboia",
+        "clipsddoia",
         "clipboia",
         "clipkandinsky",
     ]:
@@ -65,7 +65,7 @@ def validate(
         is_boia = False
     if dataset_name in ["boia", "clipboia"]:
         extract_layer = "fc1"  # fc1, fc2, fc3, fc4
-    if dataset_name in ["miniboia", "clipminiboia"]:
+    if dataset_name in ["sddoia", "clipsddoia"]:
         extract_layer = "fc2"  # conv1, conv2, conv3, conv4, conv5, conv6, fc1, fc2
     if dataset_name in ["kandinsky", "minikandinsky", "clipkandinsky"]:
         extract_layer = "fc2"
@@ -92,12 +92,12 @@ def validate(
 def get_model(modelname, encoder, args):
     if modelname.lower() == "boiann":
         return BOIAnn(encoder=encoder, args=args)
-    if modelname.lower() == "miniboiann":
-        return MiniBOIAnn(encoder=encoder, args=args)
+    if modelname.lower() == "sddoiann":
+        return SDDOIAnn(encoder=encoder, args=args)
     if modelname.lower() == "boiacbm":
         return BoiaCBM(encoder=encoder, args=args)
-    if modelname.lower() == "miniboiacbm":
-        return MiniBoiaCBM(encoder=encoder, args=args)
+    if modelname.lower() == "sddoiacbm":
+        return SDDOIACBM(encoder=encoder, args=args)
     if modelname.lower() == "mnistnn":
         return MNISTnn(encoder=encoder, args=args)
     if modelname.lower() == "mnistcbm":
@@ -111,8 +111,8 @@ def get_model(modelname, encoder, args):
 def get_dataset(datasetname, args):
     if datasetname.lower() == "boia":
         return BOIA(args)
-    if datasetname.lower() == "miniboia":
-        return MINIBOIA(args)
+    if datasetname.lower() == "sddoia":
+        return SDDOIA(args)
     if datasetname.lower() == "minikandinsky":
         return MiniKandinsky(args)
     if datasetname.lower() == "kandinsky":
@@ -123,8 +123,8 @@ def get_dataset(datasetname, args):
         return CLIPSHORTMNIST(args)
     if datasetname.lower() == "clipkandinsky":
         return CLIPKandinsky(args)
-    if datasetname.lower() == "clipminiboia":
-        return CLIPMiniboia(args)
+    if datasetname.lower() == "clipsddoia":
+        return CLIPSDDOIA(args)
     if datasetname.lower() == "clipboia":
         return CLIPBOIA(args)
 
@@ -139,14 +139,14 @@ def setup():
         batch_size=1,
         n_epochs=20,
         validate=1,
-        dataset="clipminiboia",
+        dataset="clipsddoia",
         lr=0.001,
         exp_decay=0.99,
         warmup_steps=1,
         wandb=None,
         task="boia",
         boia_model="ce",
-        model="miniboiann",
+        model="sddoiann",
         c_sup=0,
         which_c=-1,
         joint=True,
@@ -311,7 +311,7 @@ def boia_tcav_setup():
     return validloader, class_dict, concept_dict
 
 
-def miniboia_tcav_setup(full=False):
+def sddoia_tcav_setup(full=False):
     class_dict = {
         "forward": int("".join(map(str, [1, 0, 0, 0])), 2),
         "stop": int("".join(map(str, [0, 1, 0, 0])), 2),
@@ -357,8 +357,8 @@ def miniboia_tcav_setup(full=False):
         folder_suffix = "-preprocess-full"
 
     tmp_concept_dict = {}
-    for dirname in os.listdir(f"../data/miniboia{folder_suffix}/concepts"):
-        fullpath = os.path.join(f"../data/miniboia{folder_suffix}/concepts", dirname)
+    for dirname in os.listdir(f"../data/sddoia{folder_suffix}/concepts"):
+        fullpath = os.path.join(f"../data/sddoia{folder_suffix}/concepts", dirname)
         if os.path.isdir(fullpath):
             tmp_concept_dict[dirname] = data_loader(fullpath, args.dataset)
 
@@ -388,7 +388,7 @@ if __name__ == "__main__":
 
     seeds = [123, 456, 789, 1011, 1213]
     model_path = f"best_model_{args.dataset}_{args.model}"
-    miniboia_full = ""
+    sddoia_full = ""
     to_add = ""  # "_padd_random"
 
     for i, seed in enumerate(seeds):
@@ -419,10 +419,10 @@ if __name__ == "__main__":
             validloader, class_dict, concept_dict = boia_tcav_setup()
         elif args.dataset in ["kandinsky", "minikandinsky", "clipkandinsky"]:
             validloader, class_dict, concept_dict = kand_tcav_setup(is_clip)
-        elif args.dataset in ["miniboia", "clipminiboia"]:
-            if miniboia_full != "":
+        elif args.dataset in ["sddoia", "clipsddoia"]:
+            if sddoia_full != "":
                 to_add = "_full"
-            validloader, class_dict, concept_dict = miniboia_tcav_setup()
+            validloader, class_dict, concept_dict = sddoia_tcav_setup()
 
         validate(
             model,

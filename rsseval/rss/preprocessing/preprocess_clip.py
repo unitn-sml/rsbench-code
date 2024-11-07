@@ -22,7 +22,7 @@ def preprocess_w_CLIP(args):
     all_sets = [d_train, d_val, d_test]
     # all_sets = [d_val, d_test]
 
-    if args.dataset in ["miniboia", "shortcutmnist"]:
+    if args.dataset in ["sddoia", "shortcutmnist"]:
         d_ood = args.dataset + "_ood"
         all_sets.append(d_ood)
 
@@ -75,7 +75,7 @@ def preprocess_w_CLIP(args):
 def get_args():
     parser = argparse.ArgumentParser(description="Settings for creating CBM")
 
-    parser.add_argument("--dataset", type=str, default="miniboia")
+    parser.add_argument("--dataset", type=str, default="sddoia")
     parser.add_argument(
         "--concept_set", type=str, default=None, help="path to concept set name"
     )

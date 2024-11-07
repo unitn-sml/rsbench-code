@@ -1,10 +1,10 @@
-# Fully neural model for MiniBOIA
+# Fully neural model for SDDOIA
 import torch
 from utils.args import *
 from utils.conf import get_device
 from models.utils.utils_problog import *
 from utils.losses import *
-from utils.dpl_loss import MINIBOIA_DPL
+from utils.dpl_loss import SDDOIA_DPL
 
 
 def get_parser() -> ArgumentParser:
@@ -19,12 +19,12 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class MiniBOIAnn(nn.Module):
-    """Fully neural MODEL FOR MiniBOIA"""
+class SDDOIAnn(nn.Module):
+    """Fully neural MODEL FOR SDDOIA"""
 
-    NAME = "miniboiann"
+    NAME = "sddoiann"
     """
-    MiniBOIA
+    SDDOIA
     """
 
     def __init__(
@@ -52,7 +52,7 @@ class MiniBOIAnn(nn.Module):
         Returns:
             None: This function does not return a value.
         """
-        super(MiniBOIAnn, self).__init__()
+        super(SDDOIAnn, self).__init__()
 
         # how many images and explicit split of concepts
         self.net = encoder
@@ -95,8 +95,8 @@ class MiniBOIAnn(nn.Module):
         Raises:
             err: NotImplementedError if the loss function is not available
         """
-        if args.dataset in ["miniboia", "preminiboia", "clipminiboia"]:
-            return MINIBOIA_DPL(MINIBOIA_Cumulative)
+        if args.dataset in ["sddoia", "presddoia", "clipsddoia"]:
+            return SDDOIA_DPL(SDDOIA_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")
 

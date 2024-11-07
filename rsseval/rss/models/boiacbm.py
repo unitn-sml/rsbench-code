@@ -2,8 +2,8 @@
 from utils.args import *
 from models.utils.utils_problog import *
 from models.utils.cbm_module import CBMModule
-from utils.losses import MINIBOIA_Cumulative
-from utils.dpl_loss import MINIBOIA_DPL
+from utils.losses import SDDOIA_Cumulative
+from utils.dpl_loss import SDDOIA_DPL
 from utils.conf import get_device
 
 
@@ -171,8 +171,8 @@ class BoiaCBM(CBMModule):
         Raises:
             err: NotImplementedError if the loss function is not available
         """
-        if args.dataset in ["miniboia", "boia", "preminiboia"]:
-            return MINIBOIA_DPL(MINIBOIA_Cumulative)
+        if args.dataset in ["sddoia", "boia", "presddoia"]:
+            return SDDOIA_DPL(SDDOIA_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")
 

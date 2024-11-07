@@ -1,13 +1,13 @@
 from argparse import Namespace
-from datasets.utils.base_dataset import BaseDataset, MiniBOIA_get_loader
-from datasets.utils.miniboia_creation import MiniBOIADataset, CONCEPTS_ORDER
+from datasets.utils.base_dataset import BaseDataset, SDDOIA_get_loader
+from datasets.utils.sddoia_creation import SDDOIADataset, CONCEPTS_ORDER
 from backbones.resnet import ResNetEncoder
-from backbones.miniboiacnn import MiniBOIACnn
+from backbones.sddoiacnn import SDDOIACnn
 import time
 
 
-class MINIBOIA(BaseDataset):
-    NAME = "miniboia"
+class SDDOIA(BaseDataset):
+    NAME = "sddoia"
 
     def __init__(self, args: Namespace) -> None:
         super().__init__(args)
@@ -16,29 +16,29 @@ class MINIBOIA(BaseDataset):
     def get_data_loaders(self):
         start = time.time()
 
-        self.dataset_train = MiniBOIADataset(
+        self.dataset_train = SDDOIADataset(
             base_path="data/mini_boia_out",
             split="train",
             c_sup=self.args.c_sup,
             which_c=self.args.which_c,
             return_embeddings=self.return_embeddings,
         )
-        self.dataset_val = MiniBOIADataset(
+        self.dataset_val = SDDOIADataset(
             base_path="data/mini_boia_out",
             split="val",
             return_embeddings=self.return_embeddings,
         )
-        self.dataset_test = MiniBOIADataset(
+        self.dataset_test = SDDOIADataset(
             base_path="data/mini_boia_out",
             split="test",
             return_embeddings=self.return_embeddings,
         )
-        self.dataset_ood = MiniBOIADataset(
+        self.dataset_ood = SDDOIADataset(
             base_path="data/mini_boia_out",
             split="ood",
             return_embeddings=self.return_embeddings,
         )
-        self.dataset_ood_ambulance = MiniBOIADataset(
+        self.dataset_ood_ambulance = SDDOIADataset(
             base_path="data/mini_boia_out",
             split="ood_ambulance",
             return_embeddings=self.return_embeddings,
@@ -56,19 +56,19 @@ class MINIBOIA(BaseDataset):
         print(" len test:", len(self.dataset_test))
 
         keep_order = True if self.return_embeddings else False
-        self.train_loader = MiniBOIA_get_loader(
+        self.train_loader = SDDOIA_get_loader(
             self.dataset_train, self.args.batch_size, val_test=keep_order
         )
-        self.val_loader = MiniBOIA_get_loader(
+        self.val_loader = SDDOIA_get_loader(
             self.dataset_val, self.args.batch_size, val_test=True
         )
-        self.test_loader = MiniBOIA_get_loader(
+        self.test_loader = SDDOIA_get_loader(
             self.dataset_test, self.args.batch_size, val_test=True
         )
-        self.ood_loader = MiniBOIA_get_loader(
+        self.ood_loader = SDDOIA_get_loader(
             self.dataset_ood, self.args.batch_size, val_test=True
         )
-        self.ood_loader_ambulance = MiniBOIA_get_loader(
+        self.ood_loader_ambulance = SDDOIA_get_loader(
             self.dataset_ood_ambulance, self.args.batch_size, val_test=True
         )
 
@@ -76,7 +76,7 @@ class MINIBOIA(BaseDataset):
 
     def get_backbone(self):
         if self.args.backbone == "neural":
-            return MiniBOIACnn(), None
+            return SDDOIACnn(), None
 
         if not self.return_embeddings:
             return ResNetEncoder(c_dim=21), None

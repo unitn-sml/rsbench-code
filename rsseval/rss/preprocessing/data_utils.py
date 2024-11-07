@@ -13,17 +13,17 @@ DATASET_ROOTS = {
     "kandinsky_train": "data/kandinsky/train/all_imgs",
     "kandinsky_val": "data/kandinsky/val/all_imgs",
     "kandinsky_test": "data/kandinsky/test/all_imgs",
-    "miniboia_train": "data/miniboia/train/",
-    "miniboia_val": "data/miniboia/val/",
-    "miniboia_test": "data/miniboia/test/",
-    "miniboia_ood": "data/miniboia/ood/",
+    "sddoia_train": "data/sddoia/train/",
+    "sddoia_val": "data/sddoia/val/",
+    "sddoia_test": "data/sddoia/test/",
+    "sddoia_ood": "data/sddoia/ood/",
     "shapes3d_train": "../data/shapes3d/images",
     "shapes3d_val": "../data/shapes3d/val/images",
 }
 
 LABEL_FILES = {
     "kandinsky": "data/kandinsky_classes.txt",
-    "miniboia": "data/miniboia_classes.txt",
+    "sddoia": "data/sddoia_classes.txt",
     "shapes3d": "data/shapes3d_classes.txt",
     "shortcutmnist": "data/mnist_classes.txt",
 }

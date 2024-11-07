@@ -1,7 +1,7 @@
 from argparse import Namespace
 from datasets.utils.base_dataset import BaseDataset, BOIA_get_loader
 from datasets.utils.boia_creation import BOIADataset
-from datasets.utils.miniboia_creation import CONCEPTS_ORDER
+from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 from backbones.boia_linear import BOIAConceptizer
 from backbones.boia_mlp import BOIAMLP
 import time

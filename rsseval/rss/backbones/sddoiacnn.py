@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class MiniBOIACnn(nn.Module):
+class SDDOIACnn(nn.Module):
     def __init__(self):
-        super(MiniBOIACnn, self).__init__()
+        super(SDDOIACnn, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
         self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
         self.conv3 = nn.Conv2d(32, 64, 3, padding=1)
@@ -87,7 +87,7 @@ class FFNN(nn.Module):
 
 
 if __name__ == "__main__":
-    model = MiniBOIACnn()
+    model = SDDOIACnn()
     dummy_input = torch.randn(64, 3, 387, 469)
     output = model(dummy_input)
     print(output.shape)

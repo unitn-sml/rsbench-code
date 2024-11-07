@@ -401,8 +401,8 @@ def KAND_Cumulative(out_dict: dict, args):
     return loss + args.gamma * mitigation, losses
 
 
-def MINIBOIA_Classification(out_dict: dict, args):
-    """MINIBOIA classification loss
+def SDDOIA_Classification(out_dict: dict, args):
+    """SDDOIA classification loss
 
     Args:
         out_dict: output dictionary
@@ -415,10 +415,10 @@ def MINIBOIA_Classification(out_dict: dict, args):
     loss, losses = 0, {}
 
     if args.boia_model in ["ce"]:
-        loss, losses1 = MINIBOIA_CE(out_dict, args)
+        loss, losses1 = SDDOIA_CE(out_dict, args)
         losses.update(losses1)
     elif args.boia_model in ["bce"]:
-        loss, losses1 = MINIBOIA_BCE(out_dict, args)
+        loss, losses1 = SDDOIA_BCE(out_dict, args)
         losses.update(losses1)
     else:
         raise NotImplementedError("Not implemented loss")
@@ -426,8 +426,8 @@ def MINIBOIA_Classification(out_dict: dict, args):
     return loss, losses
 
 
-def MINIBOIA_Entropy(out_dict, args):
-    """Miniboia entropy loss
+def SDDOIA_Entropy(out_dict, args):
+    """SDDOIA entropy loss
 
     Args:
         out_dict: output dictionary
@@ -456,8 +456,8 @@ def MINIBOIA_Entropy(out_dict, args):
     return 1 - loss, losses
 
 
-def MINIBOIA_Concept_Match(out_dict: dict, args):
-    """Miniboia concept match loss
+def SDDOIA_Concept_Match(out_dict: dict, args):
+    """SDDOIA concept match loss
 
     Args:
         out_dict: output dictionary
@@ -490,8 +490,8 @@ def MINIBOIA_Concept_Match(out_dict: dict, args):
     return loss, losses
 
 
-def MINIBOIA_Cumulative(out_dict: dict, args):
-    """Miniboia cumulative loss
+def SDDOIA_Cumulative(out_dict: dict, args):
+    """SDDOIA cumulative loss
 
     Args:
         out_dict: output dictionary
@@ -501,23 +501,23 @@ def MINIBOIA_Cumulative(out_dict: dict, args):
         loss: loss value
         losses: losses dictionary
     """
-    loss, losses = MINIBOIA_Classification(out_dict, args)
+    loss, losses = SDDOIA_Classification(out_dict, args)
 
     mitigation = 0
     if args.entropy:
-        loss2, losses2 = MINIBOIA_Entropy(out_dict, args)
+        loss2, losses2 = SDDOIA_Entropy(out_dict, args)
         mitigation += args.w_h * loss2
         losses.update(losses2)
     if args.c_sup > 0:
-        loss3, losses3 = MINIBOIA_Concept_Match(out_dict, args)
+        loss3, losses3 = SDDOIA_Concept_Match(out_dict, args)
         mitigation += args.w_c * loss3
         losses.update(losses3)
 
     return loss + args.gamma * mitigation, losses
 
 
-def MINIBOIA_BCE(out_dict: dict, args):
-    """Miniboia bce
+def SDDOIA_BCE(out_dict: dict, args):
+    """SDDOIA bce
 
     Args:
         out_dict: output dictionary
@@ -547,8 +547,8 @@ def MINIBOIA_BCE(out_dict: dict, args):
     return loss, losses
 
 
-def MINIBOIA_CE(out_dict: dict, args):
-    """Miniboia bce
+def SDDOIA_CE(out_dict: dict, args):
+    """SDDOIA bce
 
     Args:
         out_dict: output dictionary

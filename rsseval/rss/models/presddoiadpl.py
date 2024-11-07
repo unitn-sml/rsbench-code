@@ -1,9 +1,9 @@
-# DPL model for Preprocessed MINIBOIA
+# DPL model for Preprocessed SDDOIA
 from utils.args import *
 from models.utils.utils_problog import *
-from models.miniboiadpl import MiniBoiaDPL
-from utils.losses import MINIBOIA_Cumulative
-from utils.dpl_loss import MINIBOIA_DPL
+from models.sddoiadpl import SDDOIADPL
+from utils.losses import SDDOIA_Cumulative
+from utils.dpl_loss import SDDOIA_DPL
 
 
 def get_parser() -> ArgumentParser:
@@ -18,13 +18,13 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class PreMiniBoiaDPL(MiniBoiaDPL):
-    """DPL MODEL FOR PreMINIBOIA"""
+class PreSDDOIADPL(SDDOIADPL):
+    """DPL MODEL FOR PreSDDOIA"""
 
-    NAME = "preminiboiadpl"
+    NAME = "presddoiadpl"
 
     """
-    PreMINIBOIA
+    PreSDDOIA
     """
 
     def __init__(
@@ -53,7 +53,7 @@ class PreMiniBoiaDPL(MiniBoiaDPL):
         Returns:
             None: This function does not return a value.
         """
-        super(PreMiniBoiaDPL, self).__init__(
+        super(PreSDDOIADPL, self).__init__(
             encoder,
             n_images=n_images,
             c_split=c_split,
@@ -76,7 +76,7 @@ class PreMiniBoiaDPL(MiniBoiaDPL):
         Raises:
             err: NotImplementedError if the loss function is not available
         """
-        if args.dataset in ["preminiboia"]:
-            return MINIBOIA_DPL(MINIBOIA_Cumulative)
+        if args.dataset in ["presddoia"]:
+            return SDDOIA_DPL(SDDOIA_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")

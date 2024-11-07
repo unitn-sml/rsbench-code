@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class PreMiniBOIAMlp(nn.Module):
+class PreSDDOIAMlp(nn.Module):
     def __init__(self):
-        super(PreMiniBOIAMlp, self).__init__()
+        super(PreSDDOIAMlp, self).__init__()
         self.fc1 = nn.Linear(512, 256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, 64)
@@ -38,7 +38,7 @@ class PreMiniBOIAMlp(nn.Module):
 
 
 if __name__ == "__main__":
-    model = PreMiniBOIAMlp()
+    model = PreSDDOIAMlp()
     dummy_input = torch.randn(64, 512)
     output = model(dummy_input)
     print(output.shape)

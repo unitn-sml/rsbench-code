@@ -3,7 +3,7 @@ import ltn
 import torch
 
 
-class MINIBOIA_SAT_AGG(torch.nn.Module):
+class SDDOIA_SAT_AGG(torch.nn.Module):
     def __init__(self, And, Or, Not, Implies, Equiv, Forall) -> None:
         super().__init__()
 
@@ -30,13 +30,13 @@ class MINIBOIA_SAT_AGG(torch.nn.Module):
         Ys = out_dict["LABELS"]
         conc_preds = out_dict["CS"]
 
-        sat_loss = MINIBOIAsat_agg_loss(self, conc_preds, Ys, b_idx)
+        sat_loss = SDDOIAsat_agg_loss(self, conc_preds, Ys, b_idx)
 
         return sat_loss
 
 
-def MINIBOIAsat_agg_loss(self, conc_preds, actions, b_idx):
-    """MINIBOIA sat agg loss
+def SDDOIAsat_agg_loss(self, conc_preds, actions, b_idx):
+    """SDDOIA sat agg loss
 
     Args:
         eltn: eltn

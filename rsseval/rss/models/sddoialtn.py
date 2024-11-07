@@ -5,7 +5,7 @@ from utils.args import *
 from models.boialtn import BOIALTN
 from utils.conf import get_device
 from utils.losses import *
-from utils.boia_ltn_loss import MINIBOIA_SAT_AGG
+from utils.boia_ltn_loss import SDDOIA_SAT_AGG
 import ltn
 
 
@@ -21,16 +21,16 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class MiniBoiaLTN(BOIALTN):
+class SDDOIALTN(BOIALTN):
     """DPL MODEL FOR BOIA"""
 
-    NAME = "miniboialtn"
+    NAME = "sddoialtn"
 
     """
-    MiniBOIA
+    SDDOIA
     """
 
     def __init__(self, encoder, n_images=2, c_split=(), args=None):
-        super(MiniBoiaLTN, self).__init__(
+        super(SDDOIALTN, self).__init__(
             encoder=encoder, n_images=n_images, c_split=c_split, args=args
         )

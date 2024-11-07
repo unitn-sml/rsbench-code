@@ -2,8 +2,8 @@
 from utils.args import *
 from models.utils.utils_problog import *
 from utils.losses import *
-from utils.dpl_loss import MINIBOIA_DPL
-from models.miniboiann import MiniBOIAnn
+from utils.dpl_loss import SDDOIA_DPL
+from models.sddoiann import SDDOIAnn
 
 
 def get_parser() -> ArgumentParser:
@@ -18,7 +18,7 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class BOIAnn(MiniBOIAnn):
+class BOIAnn(SDDOIAnn):
     """Fully neural MODEL FOR BOIA"""
 
     NAME = "boiann"
@@ -75,6 +75,6 @@ class BOIAnn(MiniBOIAnn):
             err: NotImplementedError if the loss function is not available
         """
         if args.dataset in ["boia", "clipboia"]:
-            return MINIBOIA_DPL(MINIBOIA_Cumulative)
+            return SDDOIA_DPL(SDDOIA_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")

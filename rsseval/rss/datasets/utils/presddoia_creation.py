@@ -5,12 +5,12 @@ import numpy as np, glob
 import re
 import json
 from datasets.utils.mnist_creation import generate_r_seq
-from datasets.utils.miniboia_creation import CONCEPTS_ORDER
+from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 
 PREFIX = "MINI_BOIA_"
 
 
-class PreMiniBOIADataset(torch.utils.data.Dataset):
+class PreSDDOIADataset(torch.utils.data.Dataset):
     def __init__(self, base_path, split, c_sup=1, which_c=[-1]):
 
         # path and train/val/test type
@@ -106,10 +106,10 @@ class PreMiniBOIADataset(torch.utils.data.Dataset):
 if __name__ == "__main__":
     print("Hello World")
 
-    train_data = PreMiniBOIADataset("../../data/mini_boia_embeddings", "train")
-    val_data = PreMiniBOIADataset("../../data/mini_boia_embeddings", "val")
-    test_data = PreMiniBOIADataset("../../data/mini_boia_embeddings", "test")
-    ood_data = PreMiniBOIADataset("../../data/mini_boia_embeddings", "ood")
+    train_data = PreSDDOIADataset("../../data/mini_boia_embeddings", "train")
+    val_data = PreSDDOIADataset("../../data/mini_boia_embeddings", "val")
+    test_data = PreSDDOIADataset("../../data/mini_boia_embeddings", "test")
+    ood_data = PreSDDOIADataset("../../data/mini_boia_embeddings", "ood")
 
     embedding, label, concepts = train_data[0]
     print(embedding.shape, concepts.shape, label.shape)

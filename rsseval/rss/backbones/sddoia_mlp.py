@@ -1,10 +1,10 @@
 import torch.nn as nn
 
 
-class MiniBOIALinear(nn.Module):
+class SDDOIALinear(nn.Module):
 
     def __init__(self, din, nconcept):
-        super(MiniBOIALinear, self).__init__()
+        super(SDDOIALinear, self).__init__()
 
         # set self hyperparameters
         self.din = din  # Input dimension

@@ -37,7 +37,7 @@ CONCEPTS_ORDER = {
 PREFIX = "MINI_BOIA_"
 
 
-class MiniBOIADataset(torch.utils.data.Dataset):
+class SDDOIADataset(torch.utils.data.Dataset):
     def __init__(
         self,
         base_path,
@@ -235,7 +235,7 @@ class MiniBOIADataset(torch.utils.data.Dataset):
 ## --------------------------------------------------------------- ##
 
 
-class ClIP_MiniBOIADataset(torch.utils.data.Dataset):
+class ClIP_SDDOIADataset(torch.utils.data.Dataset):
     def __init__(
         self,
         base_path,
@@ -248,15 +248,15 @@ class ClIP_MiniBOIADataset(torch.utils.data.Dataset):
 
         # path and train/val/test type
         self.dir_path = base_path
-        self.base_path = "data/saved_activations/miniBOIA-preprocessed/"
-        # self.base_path = os.path.join(base_path, 'miniboia')
+        self.base_path = "data/saved_activations/SDDOIA-preprocessed/"
+        # self.base_path = os.path.join(base_path, 'sddoia')
 
         self.split = split
 
         # collecting images
         self.list_images = glob.glob(
             os.path.join(
-                "data/saved_activations/miniBOIA-preprocessed", self.split, "*"
+                "data/saved_activations/SDDOIA-preprocessed", self.split, "*"
             )
         )
         # sort the images
@@ -393,10 +393,10 @@ class ClIP_MiniBOIADataset(torch.utils.data.Dataset):
             self.list_images = self.list_images[random_indices]
             self.names = self.names[random_indices]
 
-        # IMG_PATH = os.path.join(self.dir_path, 'saved_activations', f'miniboia_{self.split}_clip_ViT-B32.pt')
+        # IMG_PATH = os.path.join(self.dir_path, 'saved_activations', f'sddoia_{self.split}_clip_ViT-B32.pt')
         # image_features = torch.load(IMG_PATH)
 
-        # TXT_PATH = os.path.join(self.dir_path, 'saved_activations', 'miniboia_filtered_ViT-B32.pt')
+        # TXT_PATH = os.path.join(self.dir_path, 'saved_activations', 'sddoia_filtered_ViT-B32.pt')
         # text_features = torch.load(TXT_PATH)
 
         # image_features /= torch.norm(image_features, dim=1, keepdim=True)
@@ -432,10 +432,10 @@ class ClIP_MiniBOIADataset(torch.utils.data.Dataset):
 if __name__ == "__main__":
     print("Hello World")
 
-    train_data = MiniBOIADataset("../../data/mini_boia_out", "train")
-    val_data = MiniBOIADataset("../../data/mini_boia_out", "val")
-    test_data = MiniBOIADataset("../../data/mini_boia_out", "test")
-    ood_data = MiniBOIADataset("../../data/mini_boia_out", "ood")
+    train_data = SDDOIADataset("../../data/mini_boia_out", "train")
+    val_data = SDDOIADataset("../../data/mini_boia_out", "val")
+    test_data = SDDOIADataset("../../data/mini_boia_out", "test")
+    ood_data = SDDOIADataset("../../data/mini_boia_out", "ood")
 
     img, label, concepts = train_data[0]
     print(img.shape, concepts.shape, label.shape)

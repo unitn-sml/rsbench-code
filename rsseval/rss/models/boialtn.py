@@ -5,7 +5,7 @@ from utils.args import *
 from utils.conf import get_device
 from utils.losses import *
 from models.cext import CExt
-from utils.boia_ltn_loss import MINIBOIA_SAT_AGG
+from utils.boia_ltn_loss import SDDOIA_SAT_AGG
 import ltn
 
 
@@ -194,7 +194,7 @@ class BOIALTN(CExt):
         Raises:
             err: NotImplementedError if the loss function is not available
         """
-        if args.dataset in ["miniboia", "boia", "preminiboia"]:
+        if args.dataset in ["sddoia", "boia", "presddoia"]:
             _and, _implies = None, None
             if args.and_op == "Godel":
                 _and = ltn.fuzzy_ops.AndMin()
@@ -228,7 +228,7 @@ class BOIALTN(CExt):
             Forall = ltn.Quantifier(
                 ltn.fuzzy_ops.AggregPMeanError(p=args.p), quantifier="f"
             )
-            return MINIBOIA_SAT_AGG(And, Or, Not, Implies, Equiv, Forall)
+            return SDDOIA_SAT_AGG(And, Or, Not, Implies, Equiv, Forall)
         else:
             return NotImplementedError("Wrong dataset choice")
 

@@ -187,7 +187,7 @@ if __name__ == "__main__":
         wandb=None,
         task="boia",
         boia_model="ce",
-        model="miniboiadpl",
+        model="sddoiadpl",
         c_sup=0,
         which_c=-1,
     )

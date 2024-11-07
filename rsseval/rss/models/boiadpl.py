@@ -1,9 +1,9 @@
 # DPL model for BOIA
 from utils.args import *
 from models.utils.utils_problog import *
-from models.miniboiadpl import MiniBoiaDPL
-from utils.losses import MINIBOIA_Cumulative
-from utils.dpl_loss import MINIBOIA_DPL
+from models.sddoiadpl import SDDOIADPL
+from utils.losses import SDDOIA_Cumulative
+from utils.dpl_loss import SDDOIA_DPL
 
 
 def get_parser() -> ArgumentParser:
@@ -18,7 +18,7 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class BoiaDPL(MiniBoiaDPL):
+class BoiaDPL(SDDOIADPL):
     """DPL MODEL FOR BOIA"""
 
     NAME = "boiadpl"
@@ -77,6 +77,6 @@ class BoiaDPL(MiniBoiaDPL):
             err: NotImplementedError if the loss function is not available
         """
         if args.dataset in ["boia"]:
-            return MINIBOIA_DPL(MINIBOIA_Cumulative)
+            return SDDOIA_DPL(SDDOIA_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")

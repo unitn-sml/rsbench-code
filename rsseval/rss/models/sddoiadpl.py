@@ -1,11 +1,11 @@
-# DPL model for MINIBOIA
+# DPL model for SDDOIA
 import torch
 from models.utils.deepproblog_modules import DeepProblogModel
 from utils.args import *
 from utils.conf import get_device
 from models.utils.utils_problog import *
-from utils.losses import MINIBOIA_Cumulative
-from utils.dpl_loss import MINIBOIA_DPL
+from utils.losses import SDDOIA_Cumulative
+from utils.dpl_loss import SDDOIA_DPL
 
 
 def get_parser() -> ArgumentParser:
@@ -20,10 +20,10 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class MiniBoiaDPL(DeepProblogModel):
+class SDDOIADPL(DeepProblogModel):
     """DPL MODEL FOR MINI BOIA"""
 
-    NAME = "miniboiadpl"
+    NAME = "sddoiadpl"
 
     """
     BOIA but with synthetic data
@@ -55,7 +55,7 @@ class MiniBoiaDPL(DeepProblogModel):
         Returns:
             None: This function does not return a value.
         """
-        super(MiniBoiaDPL, self).__init__(
+        super(SDDOIADPL, self).__init__(
             encoder=encoder,
             model_dict=model_dict,
             n_facts=n_facts,
@@ -89,7 +89,7 @@ class MiniBoiaDPL(DeepProblogModel):
                 self.L_w_q = build_world_queries_matrix_L().to(self.device)
                 self.R_w_q = build_world_queries_matrix_R().to(self.device)
         else:
-            raise NotImplementedError("Invalid task for MINIBOIA")
+            raise NotImplementedError("Invalid task for SDDOIA")
 
         # opt and device
         self.opt = None
@@ -288,8 +288,8 @@ class MiniBoiaDPL(DeepProblogModel):
         Raises:
             err: NotImplementedError if the loss function is not available
         """
-        if args.dataset in ["miniboia", "preminiboia"]:
-            return MINIBOIA_DPL(MINIBOIA_Cumulative)
+        if args.dataset in ["sddoia", "presddoia"]:
+            return SDDOIA_DPL(SDDOIA_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")
 

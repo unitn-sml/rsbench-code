@@ -312,7 +312,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     best_f1 = 0.0
 
     to_add = ""
-    if args.model in ["kandcbm", "miniboiacbm", "boiacbm", "mnistcbm"]:
+    if args.model in ["kandcbm", "sddoiacbm", "boiacbm", "mnistcbm"]:
         to_add = "_partial_sup"
 
     if args.dataset in ["shortmnist"] and args.joint:

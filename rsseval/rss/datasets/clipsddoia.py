@@ -1,13 +1,13 @@
-from datasets.utils.miniboia_creation import ClIP_MiniBOIADataset
+from datasets.utils.sddoia_creation import ClIP_SDDOIADataset
 from backbones.identity import Identity
 from backbones.disent_encoder_decoder import DecoderConv64
 import time
 
-from datasets.utils.base_dataset import BaseDataset, MiniBOIA_get_loader
-from datasets.utils.miniboia_creation import CONCEPTS_ORDER
-from datasets.utils.preminiboia_creation import PreMiniBOIADataset
-from backbones.miniboiacnn import FFNN
-from backbones.preminiboiacnn import PreMiniBOIAMlp
+from datasets.utils.base_dataset import BaseDataset, SDDOIA_get_loader
+from datasets.utils.sddoia_creation import CONCEPTS_ORDER
+from datasets.utils.presddoia_creation import PreSDDOIADataset
+from backbones.sddoiacnn import FFNN
+from backbones.presddoiacnn import PreSDDOIAMlp
 
 import torch
 import os
@@ -15,8 +15,8 @@ import numpy as np
 from argparse import Namespace
 
 
-class CLIPMiniboia(BaseDataset):
-    NAME = "clipminiboia"
+class CLIPSDDOIA(BaseDataset):
+    NAME = "clipsddoia"
 
     def __init__(self, args) -> None:
         super().__init__(args)
@@ -33,16 +33,16 @@ class CLIPMiniboia(BaseDataset):
     def get_data_loaders(self):
         start = time.time()
 
-        self.dataset_train = ClIP_MiniBOIADataset(
+        self.dataset_train = ClIP_SDDOIADataset(
             base_path="data",
             split="train",
             c_sup=self.args.c_sup,
             which_c=self.args.which_c,
         )
-        self.dataset_val = ClIP_MiniBOIADataset(base_path="data", split="val")
-        self.dataset_test = ClIP_MiniBOIADataset(base_path="data", split="test")
-        self.dataset_ood = ClIP_MiniBOIADataset(base_path="data", split="ood")
-        self.dataset_ood_ambulance = ClIP_MiniBOIADataset(
+        self.dataset_val = ClIP_SDDOIADataset(base_path="data", split="val")
+        self.dataset_test = ClIP_SDDOIADataset(base_path="data", split="test")
+        self.dataset_ood = ClIP_SDDOIADataset(base_path="data", split="ood")
+        self.dataset_ood_ambulance = ClIP_SDDOIADataset(
             base_path="data", split="ood_ambulance", is_ood_k=True
         )
 
@@ -56,19 +56,19 @@ class CLIPMiniboia(BaseDataset):
         )
         print(" len test:", len(self.dataset_test))
 
-        self.train_loader = MiniBOIA_get_loader(
+        self.train_loader = SDDOIA_get_loader(
             self.dataset_train, self.args.batch_size, val_test=False
         )
-        self.val_loader = MiniBOIA_get_loader(
+        self.val_loader = SDDOIA_get_loader(
             self.dataset_val, self.args.batch_size, val_test=True
         )
-        self.test_loader = MiniBOIA_get_loader(
+        self.test_loader = SDDOIA_get_loader(
             self.dataset_test, self.args.batch_size, val_test=True
         )
-        self.ood_loader = MiniBOIA_get_loader(
+        self.ood_loader = SDDOIA_get_loader(
             self.dataset_ood, self.args.batch_size, val_test=True
         )
-        self.ood_loader_ambulance = MiniBOIA_get_loader(
+        self.ood_loader_ambulance = SDDOIA_get_loader(
             self.dataset_ood_ambulance, self.args.batch_size, val_test=True
         )
 
@@ -98,15 +98,15 @@ class CLIPMiniboia(BaseDataset):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-    def save_minibboia_tcav_loader(self, d_type: str, folder_name="miniboia-tcav-clip"):
+    def save_minibboia_tcav_loader(self, d_type: str, folder_name="sddoia-tcav-clip"):
 
         # 1 as batch size and not shuffled
         if d_type == "train":
-            dataloader = MiniBOIA_get_loader(self.dataset_train, 1, val_test=True)
+            dataloader = SDDOIA_get_loader(self.dataset_train, 1, val_test=True)
         elif d_type == "val":
-            dataloader = MiniBOIA_get_loader(self.dataset_val, 1, val_test=True)
+            dataloader = SDDOIA_get_loader(self.dataset_val, 1, val_test=True)
         else:
-            dataloader = MiniBOIA_get_loader(self.dataset_test, 1, val_test=True)
+            dataloader = SDDOIA_get_loader(self.dataset_test, 1, val_test=True)
 
         self._create_dir(f"data/{folder_name}")
 
@@ -171,12 +171,12 @@ if __name__ == "__main__":
         wandb=None,
         task="boia",
         boia_model="ce",
-        model="miniboiadpl",
+        model="sddoiadpl",
         c_sup=0,
         which_c=-1,
     )
 
-    dataset = CLIPMiniboia(args)
+    dataset = CLIPSDDOIA(args)
 
     train, val, test = dataset.get_data_loaders()
     dataset.save_minibboia_tcav_loader("val")

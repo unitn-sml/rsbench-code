@@ -87,8 +87,8 @@ class KAND_DPL(torch.nn.Module):
         return loss, losses
 
 
-class MINIBOIA_DPL(torch.nn.Module):
-    """Miniboia DPL loss"""
+class SDDOIA_DPL(torch.nn.Module):
+    """SDDOIA DPL loss"""
 
     def __init__(self, loss, nr_classes=4) -> None:
         """Initialize method

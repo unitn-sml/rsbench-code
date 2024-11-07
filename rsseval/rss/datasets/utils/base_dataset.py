@@ -110,7 +110,7 @@ def KAND_get_loader(dataset, batch_size, val_test=False, preprocess=False):
         return DataLoader(dataset, shuffle=True, batch_size=batch_size, num_workers=0)
 
 
-def MiniBOIA_get_loader(dataset, batch_size, num_workers=4, val_test=False):
+def SDDOIA_get_loader(dataset, batch_size, num_workers=4, val_test=False):
     if val_test:
         return DataLoader(
             dataset,

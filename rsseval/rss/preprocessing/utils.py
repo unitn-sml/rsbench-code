@@ -105,7 +105,7 @@ def save_clip_image_features(
     split = extract_after_underscore(d_probe)
 
     os.makedirs(
-        os.path.join(save_name[: save_name.rfind("/")], "miniBOIA-preprocessed", split),
+        os.path.join(save_name[: save_name.rfind("/")], "SDDOIA-preprocessed", split),
         exist_ok=True,
     )
     with torch.no_grad():
@@ -127,7 +127,7 @@ def save_clip_image_features(
 
                 save_path = os.path.join(
                     save_name[: save_name.rfind("/")],
-                    "miniBOIA-preprocessed",
+                    "SDDOIA-preprocessed",
                     split,
                     extract_numbers_from_path(label) + ".pt",
                 )

@@ -178,13 +178,13 @@ def evaluate_metrics(
         ]:
             loss, ac, acc, f1 = KAND_eval_tloss_cacc_acc(out_dict)
         elif args.dataset in [
-            "miniboia",
+            "sddoia",
             "boia",
-            "preminiboia",
+            "presddoia",
             "clipboia",
-            "clipminiboia",
+            "clipsddoia",
         ]:
-            loss, ac, acc, f1 = MiniBOIA_eval_tloss_cacc_acc(out_dict)
+            loss, ac, acc, f1 = SDDOIA_eval_tloss_cacc_acc(out_dict)
         else:
             NotImplementedError()
 
@@ -202,11 +202,11 @@ def evaluate_metrics(
     if last:
 
         if args.dataset in [
-            "miniboia",
+            "sddoia",
             "boia",
-            "preminiboia",
+            "presddoia",
             "clipboia",
-            "clipminiboia",
+            "clipsddoia",
         ]:
             y_pred_split = np.split(y_pred, 4, axis=1)
             ys = np.stack([pred.argmax(axis=1) for pred in y_pred_split], axis=1)
@@ -229,19 +229,19 @@ def evaluate_metrics(
         assert len(gs) == len(cs), f"gs: {gs.shape}, cs: {cs.shape}"
 
         if args.dataset not in [
-            "miniboia",
+            "sddoia",
             "boia",
-            "preminiboia",
+            "presddoia",
             "clipboia",
-            "clipminiboia",
+            "clipsddoia",
         ]:
             gs = np.concatenate(gs, axis=0).squeeze(1)
         if args.dataset in [
-            "miniboia",
+            "sddoia",
             "boia",
-            "preminiboia",
+            "presddoia",
             "clipboia",
-            "clipminiboia",
+            "clipsddoia",
         ]:
             cs = (cs >= 0.5).astype(np.int)
         elif args.dataset not in [
@@ -270,11 +270,11 @@ def evaluate_metrics(
             )
 
         if args.dataset not in [
-            "miniboia",
+            "sddoia",
             "boia",
-            "preminiboia",
+            "presddoia",
             "clipboia",
-            "clipminiboia",
+            "clipsddoia",
         ]:
             p_cs_all = np.concatenate(p_cs_all, axis=0).squeeze(
                 1
@@ -295,15 +295,15 @@ def evaluate_metrics(
             "prekandinsky",
             "minikandinsky",
             "clipkandinsky",
-            "miniboia",
+            "sddoia",
             "boia",
             "clipboia",
-            "preminiboia",
+            "presddoia",
             "addmnist",
             "halfmnist",
             "shortmnist",
             "restrictedmnist",
-            "clipminiboia",
+            "clipsddoia",
             "clipshortmnist",
         ]:
             if cf1:
@@ -452,8 +452,8 @@ def KAND_eval_tloss_cacc_acc(out_dict, debug=True, cf1=False):
         return loss / len(objs), cacc * 100, acc * 100, f1 * 100
 
 
-def MiniBOIA_eval_tloss_cacc_acc(out_dict):
-    """MiniBOIA evaluation
+def SDDOIA_eval_tloss_cacc_acc(out_dict):
+    """SDDOIA evaluation
 
     Args:
         out_dict (Dict[str]): dictionary of outputs

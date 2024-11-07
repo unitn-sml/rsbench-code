@@ -1,7 +1,7 @@
 from argparse import Namespace
 from datasets.utils.base_dataset import BaseDataset, BOIA_get_loader
 from datasets.utils.boia_creation import CLIPBOIADataset
-from datasets.utils.miniboia_creation import CONCEPTS_ORDER
+from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 from backbones.boia_linear import BOIAConceptizer
 from backbones.boia_mlp import CLIPMLP
 import time
@@ -171,7 +171,7 @@ if __name__ == "__main__":
         wandb=None,
         task="boia",
         boia_model="ce",
-        model="miniboiadpl",
+        model="sddoiadpl",
         c_sup=0,
         which_c=-1,
     )

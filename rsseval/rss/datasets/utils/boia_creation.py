@@ -3,7 +3,7 @@ import torch.utils.data
 from torch.utils.data import Dataset
 import pickle
 from datasets.utils.mnist_creation import generate_r_seq
-from datasets.utils.miniboia_creation import CONCEPTS_ORDER
+from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 
 
 class BOIADataset(Dataset):

@@ -18,9 +18,9 @@ class SimpleNet(torch.nn.Module):
         return x
 
 
-class MiniBOIACnn(nn.Module):
+class SDDOIACnn(nn.Module):
     def __init__(self):
-        super(MiniBOIACnn, self).__init__()
+        super(SDDOIACnn, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
         self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
         self.conv3 = nn.Conv2d(32, 64, 3, padding=1)
