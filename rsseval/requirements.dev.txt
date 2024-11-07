@@ -1,0 +1,5 @@
+black>=22.3.0
+myst-parser>=0.17.2
+sphinx>=4.5.0
+sphinx-rtd-theme>=1.0.0
+docutils>=0.17.1
