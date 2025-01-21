@@ -85,6 +85,7 @@ class Dataset:
         self.gvecs, self.ys = None, None
         self.n_variables = len(domain_sizes) # n variables in total
         self.n_bits = sum(domain_sizes) # n bits in total
+        self.n_ybits = 2 # XXX
 
     @abstractmethod
     def make_data(self):
@@ -271,6 +272,10 @@ def main():
         help="dataset to count RSs for"
     )
     parser.add_argument(
+        "-J", "--joint", action="store_true",
+        help="count joint reasoning shortcuts",
+    )
+    parser.add_argument(
         "-s", "--subsample", type=float, default=1.0,
         help="fraction or number of observed gvecs to use (def. 1.0)"
     )
@@ -337,6 +342,8 @@ def main():
     # generating the formula encoding the RSs
     A = exprvars("A", dataset.n_bits, dataset.n_bits)
     O = exprvars("O", dataset.n_variables, dataset.n_variables)
+    if args.joint:
+        B = exprvars("B", dataset.n_ybits, dataset.n_bits)
 
     # A encodes a function C* -> C
     # each C* index is mapped into exactly one C index
@@ -368,7 +375,15 @@ def main():
             formula &= OneHot(*cvec[offset:offset+vsize])
             offset += vsize
 
-        formula &= dataset.k(cvec, y)
+        if not args.joint:
+            formula &= dataset.k(cvec, y)
+        else:
+            assert dataset.n_ybits == 2
+            yvec = [_booldot(B[i, :], cvec).simplify()
+                    for i in range(dataset.n_ybits)]
+            formula &= OneHot(yvec)
+            formula &= yvec[1] if y else yvec[0]
+
         if has_csup:
             for i in range(dataset.n_bits):
                 formula &= cvec[i] if gvec[i] else ~cvec[i]
