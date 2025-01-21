@@ -43,6 +43,17 @@ def _prop_or_count(n, p):
     return int(p if p > 1 else np.trunc(n * p))
 
 
+def _cat_to_ohe(values, domain_sizes):
+    """One-hot encodes a vector of categorical values."""
+    n_bits = sum(domain_sizes)
+    result = np.zeros(n_bits)
+    n_bits_filled = 0
+    for i, value in enumerate(values):
+        result[n_bits_filled + value] = 1
+        n_bits_filled += domain_sizes[i]
+    return result
+
+
 def _booldot(avec, bvec):
     """Boolean dot product."""
     return reduce(op.or_, [a & b for a, b in zip(avec, bvec)])
@@ -93,7 +104,6 @@ class Dataset:
         self.gvecs, self.ys = None, None
         self.n_variables = len(domain_sizes) # n variables in total
         self.n_bits = sum(domain_sizes) # n bits in total
-        self.n_ybits = 2 # XXX
 
     @abstractmethod
     def make_data(self):
@@ -350,9 +360,7 @@ def main():
     A = exprvars("A", dataset.n_bits, dataset.n_bits)
     O = exprvars("O", dataset.n_variables, dataset.n_variables)
     if args.joint:
-        B = exprvars("B", *(dataset.domain_sizes + [dataset.n_ybits]))
-        # TODO make sure entries of B are one-hot: a combination of C's should
-        # predict only one label -- unnecessary if label supervision is given
+        B = exprvars("B", *dataset.domain_sizes)
 
     # A encodes a function C* -> C
     # each C* index is mapped into exactly one C index
@@ -387,20 +395,21 @@ def main():
         if not args.joint:
             formula &= dataset.k(cvec, y)
         else:
-            assert dataset.n_ybits == 2
-            yvec = [False, True] if y else [True, False]
-
-            n_bits_for_concepts = sum(dataset.n_bits)
-
             for entry in B._items:
-                cvals = make_onehot(entry.indices)
+
+                # This tells us what world activates this entry in B
+                cval = _cat_to_ohe(entry.indices, dataset.domain_sizes)
+
+                # Does cvec activate this entry? Both cval and cvec are OHE
                 same_cs = And(*[
-                    Equal(cvec[i], cvals[i]) for i in dataset.n_bits)
+                    Equal(cvec[i], cval[i]) for i in range(dataset.n_bits)
                 ])
-                same_ys = And(*[
-                    Equal(onehot_y[i], cvals[n_bits_for_concepts + i]) for i in range(2)
-                ])
-                formula &= Implies(same_cs, same_ys)
+
+                # Does y match the label recorded in this entry?
+                same_y = Equal(entry, y)
+
+                # If the concepts activate the entry, the prediction must be y
+                formula &= Implies(same_cs, same_y)
 
         if has_csup:
             for i in range(dataset.n_bits):
@@ -427,7 +436,7 @@ def main():
     if args.enumerate:
         n_sol = 0
         for sol in formula.satisfy_all():
-            _pp_solution(sol, dataset.n_variables, dataset.n_bits, dataset.n_ybits)
+            _pp_solution(sol, dataset.n_variables, dataset.n_bits, 2)
             print("=" * 78)
             n_sol += 1
 
