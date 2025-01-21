@@ -10,8 +10,8 @@ def main():
 
     This number represents a lower bound to the number of RSs in the task.
 
-    """    
-    
+    """
+
     fmt_class = argparse.ArgumentDefaultsHelpFormatter
     parser = argparse.ArgumentParser(formatter_class=fmt_class)
     parser.add_argument("path", type=str,
