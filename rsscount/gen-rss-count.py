@@ -214,7 +214,6 @@ class RandomCNFDataset(CNFDataset):
         return clauses #list(map(list, clauses))
 
 
-
 class FileCNFDataset(CNFDataset):
     """Class implementing a custom CNF read from a DIMACS file."""
 
