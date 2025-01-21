@@ -83,8 +83,8 @@ class Dataset:
         self.domain_sizes = domain_sizes
         self.cnf_path = cnf_path
         self.gvecs, self.ys = None, None
-        self.n_variables = len(domain_sizes)
-        self.n_bits = sum(domain_sizes) # n bits per variable
+        self.n_variables = len(domain_sizes) # n variables in total
+        self.n_bits = sum(domain_sizes) # n bits in total
 
     @abstractmethod
     def make_data(self):
