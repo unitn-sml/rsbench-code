@@ -15,7 +15,7 @@ from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal
 
 def _pp_solution(sol, nvars, nbits):
     """Pretty-print a pyeda model."""
-    
+
     Asol = np.zeros(shape=(nbits, nbits),
                     dtype=np.int16)
 
@@ -29,7 +29,7 @@ def _pp_solution(sol, nvars, nbits):
 
     print(Asol, "\n")
     print(Osol, "\n")
-    
+
 
 def _prop_or_count(n, p):
     return int(p if p > 1 else np.trunc(n * p))
@@ -187,7 +187,7 @@ class RandomCNFDataset(CNFDataset):
         for cl in self.clauses:
             print(" ".join(map(str, cl)))
         '''
-            
+
         super().__init__(args)
 
     @staticmethod
@@ -200,7 +200,7 @@ class RandomCNFDataset(CNFDataset):
             f2 = ~ _bind(temp_vars, [new])
             return (f1.satisfy_one() is not None) and \
                 (f2.satisfy_one() is not None)
-        
+
         rng = check_random_state(rng)
         clauses = []
         while len(clauses) < m:
@@ -208,7 +208,7 @@ class RandomCNFDataset(CNFDataset):
             # we do the same
             indices = rng.choice(n, size=k) + 1
             signs = rng.choice([1, -1], size=len(indices))
-            
+
             new_clause = list(indices * signs)
             if _nontrivial(clauses, new_clause):
                 clauses.append(new_clause)
@@ -375,7 +375,7 @@ def main():
         for vsize in dataset.domain_sizes:
             formula &= OneHot(*cvec[offset:offset+vsize])
             offset += vsize
-                       
+
         formula &= dataset.k(cvec, y)
         if has_csup:
             for i in range(dataset.n_bits):
@@ -403,8 +403,8 @@ def main():
         n_sol = 0
         for sol in formula.satisfy_all():
             _pp_solution(sol, dataset.n_variables, dataset.n_bits)
-            n_sol += 1                
-            
+            n_sol += 1
+
         print(f"{n_sol} solutions")
 
 
