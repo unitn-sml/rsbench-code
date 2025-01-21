@@ -164,9 +164,6 @@ class CNFDataset(Dataset):
         constraint = _bind([cvec[i] for i in range(1, len(cvec), 2)], self.clauses)
         return constraint if y else ~constraint
 
-    def encode_background(self, A):
-        return True
-
 
 class RandomCNFDataset(CNFDataset):
     """Class implementing a random CNF."""
@@ -244,9 +241,6 @@ class XorDataset(Dataset):
     def k(self, cvec, y):
         constraint = Xor(*[cvec[i] for i in range(1, len(cvec), 2)])
         return constraint if y else ~constraint
-
-    def encode_background(self, A):
-        return True
 
 
 DATASETS = {
@@ -362,9 +356,6 @@ def main():
 
     formula &= And(*[OneHot(*A[:, i])
                     for i in range(dataset.n_bits)])
-
-    # encode extra symbolic background
-    formula &= dataset.encode_background(A)
 
     # force RSs to achieve perfect performance on data
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
