@@ -13,22 +13,30 @@ from pyeda.inter import exprvars, expr2dimacscnf
 from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal
 
 
-def _pp_solution(sol, nvars, nbits):
+def _pp_solution(sol, nvars, nbits, ybits):
     """Pretty-print a pyeda model."""
 
     Asol = np.zeros(shape=(nbits, nbits),
                     dtype=np.int16)
-
     Osol = np.zeros(shape=(nvars, nvars),
                     dtype=np.int16)
+    Bsol = np.zeros(shape=(ybits, nbits),
+                    dtype=np.int16)
+
     for k in sol:
         if k.name == 'A' and sol[k]:
             Asol[k.indices] = 1
+        if k.name == 'B' and sol[k]:
+            Bsol[k.indices] = 1
         elif k.name == 'O' and sol[k]:
             Osol[k.indices] = 1
 
-    print(Asol, "\n")
-    print(Osol, "\n")
+    print("B:")
+    print(Bsol)
+    print("A:")
+    print(Asol)
+    print("O:")
+    print(Osol)
 
 
 def _prop_or_count(n, p):
@@ -408,7 +416,8 @@ def main():
     if args.enumerate:
         n_sol = 0
         for sol in formula.satisfy_all():
-            _pp_solution(sol, dataset.n_variables, dataset.n_bits)
+            _pp_solution(sol, dataset.n_variables, dataset.n_bits, dataset.n_ybits)
+            print("=" * 78)
             n_sol += 1
 
         print(f"{n_sol} solutions")
