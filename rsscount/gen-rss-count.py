@@ -13,15 +13,15 @@ from pyeda.inter import exprvars, expr2dimacscnf
 from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal
 
 
-def _pp_solution(sol, nvars, nbits, ybits):
+def _pp_solution(sol, n_cvars, n_cbits, n_ybits):
     """Pretty-print a pyeda model."""
 
-    Asol = np.zeros(shape=(nbits, nbits),
-                    dtype=np.int16)
-    Osol = np.zeros(shape=(nvars, nvars),
-                    dtype=np.int16)
-    Bsol = np.zeros(shape=(ybits, nbits),
-                    dtype=np.int16)
+    Asol = np.zeros(shape=(n_cbits, n_cbits),
+                    dtype=np.uint8)
+    Osol = np.zeros(shape=(n_cvars, n_cvars),
+                    dtype=np.uint8)
+    Bsol = np.zeros(shape=(n_ybits, n_ybits),
+                    dtype=np.uint8)
 
     for k in sol:
         if k.name == 'A' and sol[k]:
