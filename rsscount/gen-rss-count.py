@@ -270,6 +270,7 @@ DATASETS = {
 
 def _get_args_string(args):
     fields = [
+        ("J", args.joint),
         ("s", args.subsample),
         ("c", args.concept_sup),
         (None, args.seed),
