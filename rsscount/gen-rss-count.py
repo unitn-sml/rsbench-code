@@ -350,7 +350,9 @@ def main():
     A = exprvars("A", dataset.n_bits, dataset.n_bits)
     O = exprvars("O", dataset.n_variables, dataset.n_variables)
     if args.joint:
-        B = exprvars("B", dataset.n_ybits, dataset.n_bits)
+        B = exprvars("B", *(dataset.domain_sizes + [dataset.n_ybits]))
+        # TODO make sure entries of B are one-hot: a combination of C's should
+        # predict only one label -- unnecessary if label supervision is given
 
     # A encodes a function C* -> C
     # each C* index is mapped into exactly one C index
@@ -386,10 +388,19 @@ def main():
             formula &= dataset.k(cvec, y)
         else:
             assert dataset.n_ybits == 2
-            yvec = [_booldot(B[i, :], cvec).simplify()
-                    for i in range(dataset.n_ybits)]
-            formula &= OneHot(yvec)
-            formula &= yvec[1] if y else yvec[0]
+            yvec = [False, True] if y else [True, False]
+
+            n_bits_for_concepts = sum(dataset.n_bits)
+
+            for entry in B._items:
+                cvals = make_onehot(entry.indices)
+                same_cs = And(*[
+                    Equal(cvec[i], cvals[i]) for i in dataset.n_bits)
+                ])
+                same_ys = And(*[
+                    Equal(onehot_y[i], cvals[n_bits_for_concepts + i]) for i in range(2)
+                ])
+                formula &= Implies(same_cs, same_ys)
 
         if has_csup:
             for i in range(dataset.n_bits):
