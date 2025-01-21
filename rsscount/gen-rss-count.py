@@ -349,7 +349,8 @@ def main():
     nzb = lambda k1,k2 : Or(A[k1*2, k2*2], A[k1*2, k2*2 + 1],
                             A[k1*2 + 1, k2*2], A[k1*2 + 1, k2*2 + 1])
 
-    # zero-blocks A are zero and viceversa
+    # all-zero blocks of A must match zero elements of O
+    # not-all-zero blocks of A must match non-zero elements of O
     formula &= And(*[Equal(O[k1, k2], nzb(k1, k2))
                      for k1 in range(dataset.n_variables)
                      for k2 in range(dataset.n_variables)])
