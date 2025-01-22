@@ -478,10 +478,6 @@ def main():
         help="print dataset prior to generating the CNF (def. False)",
     )
     parser.add_argument(
-        "--store-litmap", action="store_true",
-        help="Additionally stores the mapping DIMACS indices -> variable names (def. False)",
-    )
-    parser.add_argument(
         "-E", "--enumerate", action="store_true",
         help="enumerate solutions (def. False)",
     )
@@ -548,7 +544,7 @@ def main():
     formula = And(*[OneHot(*O[:, k])
                     for k in range(dataset.n_variables)])
 
-    # A is a function    
+    # A is a function
     formula &= And(*[OneHot(*A[:, i])
                     for i in range(dataset.n_bits)])
 
@@ -560,7 +556,7 @@ def main():
                                for j in range(sum(dataset.domain_sizes[:gi]), sum(dataset.domain_sizes[:gi+1]))])
 
     # This constraint make sure that non-zero blocks in A are consistent
-                                                        
+
     formula &= And(*[Equal(O[ci, gi], nzb(ci, gi))
                      for ci in range(dataset.n_variables)
                      for gi in range(dataset.n_variables)])
@@ -569,6 +565,8 @@ def main():
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
         cvec = [_booldot(A[i, :], gvec).simplify()
                 for i in range(len(gvec))]
+
+        # XXX should we also constrain cvec to be concept-wise one-hot?
 
         offset = 0
         for vsize in dataset.domain_sizes:
@@ -600,20 +598,11 @@ def main():
 
     # export the formula in DIMACS format
     print("converting formula to CNF...")
-    litmap, cnf = expr2dimacscnf(formula.tseitin().to_cnf())
+    _, cnf = expr2dimacscnf(formula.tseitin().to_cnf())
 
     print(f"writing formula to {cnf_path}")
     with open(cnf_path, "wt") as fp:
         fp.write(str(cnf))
-
-    if args.store_litmap:
-        litmap = {
-            str(k): str(v) for k, v in litmap.items()
-            if type(k) is int and "A" in str(v)
-        }
-
-        with open(cnf_path + ".litmap", "wb") as fp:
-            pickle.dump(litmap, fp)
 
     # WARNING: use the enumerate flag for small problems only!!
     if args.enumerate:
