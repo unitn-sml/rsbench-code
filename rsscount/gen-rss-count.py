@@ -131,6 +131,10 @@ class Dataset:
             sparse_output=False
         ).fit_transform(gs)
 
+        valid = np.where(ys >= 0)[0]
+        ys = ys[valid]
+        gs = gs[valid]
+
         return gs.astype(np.uint8), ys.astype(int)
 
     def subsample(self, p, rng=None):
@@ -322,12 +326,117 @@ class SumParityDataset(Dataset):
         return constraint.simplify()
 
 
+class ClevrDataset(Dataset):
+    """Class implementing Clevr."""
+
+    # Colors
+    GRAY = 0
+    RED = 1
+    BLUE = 2
+    GREEN = 3
+    BROWN = 4
+    PURPLE = 5
+    CYAN = 6
+    YELLOW = 7
+
+    # Shapes
+    CUBE = 0
+    SPHERE = 1
+    CYLINDER = 2
+
+    # Materials
+    RUBBER = 0
+    METAL = 1
+
+    # Sizes
+    LARGE = 0
+    SMALL = 1
+
+    def __init__(self, args):
+        super().__init__(
+            [8, 4, 2, 2, 8, 4, 2, 2], # two objects
+            f"clevr",
+        )
+
+    def make_data(self):
+
+        def clevr(x):
+            col1, sha1, mat1, siz1 = x[:4]
+            col2, sha2, mat2, siz2 = x[4:]
+
+            class1 = (
+                siz1 == self.LARGE and sha1 == self.CUBE and
+                siz2 == self.LARGE and sha2 == self.CYLINDER
+            )
+            class2 = (
+                siz1 == self.SMALL and mat1 == self.METAL and sha1 == self.CUBE and
+                siz2 == self.SMALL and sha2 == self.SPHERE
+            )
+            class3 = (
+                siz1 == self.LARGE and col1 == self.BLUE and sha1 == self.SPHERE and
+                siz2 == self.SMALL and col2 == self.YELLOW and sha2 == self.SPHERE
+            )
+
+            if class1 + class2 + class3 != 1:
+                return -1 # invalid, will be discarded in _make_all_data()
+            elif class1:
+                return 0
+            elif class2:
+                return 1
+            else:
+                return 2
+
+        self.gvecs, self.ys = self._make_all_data(clevr)
+
+    def load_data(self):
+        raise NotImplementedError()
+
+    def k(self, cvec, y):
+        # NOTE cvec is one-hot of two objects with four properties each
+        # NOTE y is categorical
+
+        col1, sha1, mat1, siz1 = cvec[0:8], cvec[8:12], cvec[12:14], cvec[14:16]
+        col2, sha2, mat2, siz2 = cvec[16:24], cvec[24:28], cvec[28:30], cvec[30:32]
+
+        rule1 = And(
+            siz1[self.LARGE],
+            sha1[self.CUBE],
+            siz2[self.LARGE],
+            sha2[self.CYLINDER],
+        ).simplify()
+        rule2 = And(
+            siz1[self.SMALL],
+            mat1[self.METAL],
+            sha1[self.CUBE],
+            siz2[self.SMALL],
+            sha2[self.SPHERE],
+        ).simplify()
+        rule3 = And(
+            siz1[self.LARGE],
+            col1[self.BLUE],
+            sha1[self.SPHERE],
+            siz2[self.SMALL],
+            col2[self.YELLOW],
+            sha2[self.SPHERE],
+        ).simplify()
+
+        if y == 0:
+            constraint = And(rule1, ~rule2, ~rule3)
+        elif y == 1:
+            constraint = And(~rule1, rule2, ~rule3)
+        else:
+            constraint = And(~rule1, ~rule2, rule3)
+
+        return constraint.simplify()
+
+
 DATASETS = {
     "cnf": FileCNFDataset,
     "random": RandomCNFDataset,
     "xor": XorDataset,
     "add": AddDataset,
     "sumparity": SumParityDataset,
+    "clevr": ClevrDataset,
 }
 
 
