@@ -523,8 +523,12 @@ def main():
         help="print dataset prior to generating the CNF",
     )
     parser.add_argument(
+        "-C", "--count", action="store_true",
+        help="count the number of solutions",
+    )
+    parser.add_argument(
         "-E", "--enumerate", action="store_true",
-        help="enumerate solutions",
+        help="enumerate all solutions (SLOW!)",
     )
     parser.add_argument(
         "-f", "--from-cnf", type=str, default=None,
@@ -634,11 +638,12 @@ def main():
         fp.write(str(cnf))
 
     # WARNING: use the enumerate flag for small problems only!!
-    if args.enumerate:
+    if args.count or args.enumerate:
         n_sol = 0
         for sol in formula.satisfy_all():
-            _pp_solution(sol, dataset)
-            print("=" * 78)
+            if args.enumerate:
+                _pp_solution(sol, dataset)
+                print("=" * 78)
             n_sol += 1
 
         print(f"{n_sol} solutions")
