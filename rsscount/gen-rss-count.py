@@ -288,7 +288,7 @@ class AddDataset(Dataset):
             for a in range(10)
             if 0 <= y - a <= 9
         ])
-        return constraint
+        return constraint.simplify()
 
 
 DATASETS = {
