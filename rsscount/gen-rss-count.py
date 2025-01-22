@@ -20,7 +20,7 @@ def _pp_solution(sol, dataset):
                     dtype=np.uint8)
     Osol = np.zeros(shape=(dataset.n_variables, dataset.n_variables),
                     dtype=np.uint8)
-    Bsol = np.zeros(shape=dataset.domain_sizes,
+    Bsol = np.zeros(shape=dataset.domain_sizes + [dataset.n_classes],
                     dtype=np.uint8)
 
     for k in sol:
@@ -43,20 +43,14 @@ def _prop_or_count(n, p):
     return int(p if p > 1 else np.trunc(n * p))
 
 
-def _cat_to_ohe(values, domain_sizes):
-    """One-hot encodes a vector of categorical values."""
-    n_bits = sum(domain_sizes)
-    result = np.zeros(n_bits)
-    n_bits_filled = 0
-    for i, value in enumerate(values):
-        result[n_bits_filled + value] = 1
-        n_bits_filled += domain_sizes[i]
-    return result
-
-
 def _booldot(avec, bvec):
     """Boolean dot product."""
     return reduce(op.or_, [a & b for a, b in zip(avec, bvec)])
+
+
+def _all_equal(avec, bvec):
+    """Equality between vectors of symbolic vars."""
+    return And(*[Equal(a, b) for a, b in zip(avec, bvec)])
 
 
 def _bind(variables, clauses):
@@ -98,12 +92,13 @@ def _read_cnf(path):
 class Dataset:
     """Abstract Dataset(task) class."""
 
-    def __init__(self, domain_sizes, cnf_path):
+    def __init__(self, domain_sizes, n_classes, cnf_path):
         self.domain_sizes = domain_sizes
         self.cnf_path = cnf_path
         self.gvecs, self.ys = None, None
         self.n_variables = len(domain_sizes) # n variables in total
         self.n_bits = sum(domain_sizes) # n bits in total
+        self.n_classes = n_classes
 
     @abstractmethod
     def make_data(self):
@@ -120,9 +115,14 @@ class Dataset:
         """Knowledge for a given example."""
         pass
 
+    def _make_all_gs(self):
+        return list(it.product(*[
+            list(range(size)) for size in self.domain_sizes
+        ]))
+
     def _make_all_data(self, infer):
         """Generates all possible ground-truh concept vectors and labels."""
-        gs = list(it.product(*[list(range(size)) for size in self.domain_sizes]))
+        gs = self._make_all_gs()
         ys = [infer(g) for g in gs]
         gs, ys = np.array(gs), np.array(ys)
 
@@ -164,6 +164,7 @@ class CNFDataset(Dataset):
 
         super().__init__(
             [2 for _ in range(self.n_variables)],
+            2, # XXX
             f"cnf_{basename}"
         )
 
@@ -250,6 +251,7 @@ class XorDataset(Dataset):
     def __init__(self, args):
         super().__init__(
             [2 for _ in range(args.n_variables)],
+            2,
             f"xor{args.n_variables}"
         )
 
@@ -271,6 +273,7 @@ class AddDataset(Dataset):
     def __init__(self, args):
         super().__init__(
             [10, 10],
+            19,
             f"mnistadd"
         )
 
@@ -301,6 +304,7 @@ class SumParityDataset(Dataset):
     def __init__(self, args):
         super().__init__(
             [10, 10],
+            2,
             f"sumparity",
         )
 
@@ -355,6 +359,7 @@ class ClevrDataset(Dataset):
     def __init__(self, args):
         super().__init__(
             [8, 4, 2, 2, 8, 4, 2, 2], # two objects
+            3, # three classes
             f"clevr",
         )
 
@@ -454,6 +459,46 @@ def _get_args_string(args):
     return basename
 
 
+def _cat_to_ohe(values, domain_sizes):
+    """One-hot encodes a vector of categorical values."""
+    n_bits = sum(domain_sizes)
+    result = np.zeros(n_bits)
+    n_bits_filled = 0
+    for i, value in enumerate(values):
+        result[n_bits_filled + value] = 1
+        n_bits_filled += domain_sizes[i]
+    return result
+
+
+def _encode_jrs_k(dataset, B, cvec, gty):
+    """Encodes the JRS counting problem.  gty is the (categorical) g-t label."""
+    formula = True
+
+    # Iterate over all possible combinations of concepts and labels; this
+    # covers the entirety of B.
+    for cval, yval in it.product(dataset._make_all_gs(), range(dataset.n_classes)):
+
+        # Create a one-hot copy of the concept values
+        ohe_cval = _cat_to_ohe(cval, dataset.domain_sizes)
+
+        # Lookup the entry in B that corresponds to cval and the g-t label
+        indices = cval + (yval,)
+        entry = B[indices]
+
+        # Do the symbolic concepts activate this entry?
+        active = _all_equal(cvec, ohe_cval)
+
+        # Does the entry predict the g-t label?
+        matches_gt = yval == gty
+
+        # If the entry of B is active (i.e., it is selected by the symbolic
+        # concepts), then it must predict the g-t label otherwise it cannot
+        # be the g-t label.
+        formula &= Implies(active, entry if matches_gt else ~entry)
+
+    return formula.simplify()
+
+
 def main():
     fmt_class = argparse.ArgumentDefaultsHelpFormatter
     parser = argparse.ArgumentParser(formatter_class=fmt_class)
@@ -529,7 +574,7 @@ def main():
     A = exprvars("A", dataset.n_bits, dataset.n_bits)
     O = exprvars("O", dataset.n_variables, dataset.n_variables)
     if args.joint:
-        B = exprvars("B", *dataset.domain_sizes)
+        B = exprvars("B", *(dataset.domain_sizes + [dataset.n_classes]))
 
     # A (and O) encode a function C* -> C
     # 1) O is a  map among variables (e.g. "Shape")
@@ -576,21 +621,7 @@ def main():
         if not args.joint:
             formula &= dataset.k(cvec, y)
         else:
-            for entry in B._items:
-
-                # This tells us what world activates this entry in B
-                cval = _cat_to_ohe(entry.indices, dataset.domain_sizes)
-
-                # Does cvec activate this entry? Both cval and cvec are OHE
-                same_cs = And(*[
-                    Equal(cvec[i], cval[i]) for i in range(dataset.n_bits)
-                ])
-
-                # Does y match the label recorded in this entry?
-                same_y = Equal(entry, y)
-
-                # If the concepts activate the entry, the prediction must be y
-                formula &= Implies(same_cs, same_y)
+            formula &= _encode_jrs_k(dataset, B, cvec, y)
 
         if has_csup:
             for i in range(dataset.n_bits):
