@@ -512,19 +512,19 @@ def main():
     )
     parser.add_argument(
         "-s", "--subsample", type=float, default=1.0,
-        help="fraction or number of observed gvecs to use (def. 1.0)"
+        help="fraction or number of observed gvecs to use"
     )
     parser.add_argument(
         "-c", "--concept-sup", type=float, default=0,
-        help="fraction or number of gvecs with concept supervision (def. 0.0)"
+        help="fraction or number of gvecs with concept supervision"
     )
     parser.add_argument(
         "-D", "--print-data", action="store_true",
-        help="print dataset prior to generating the CNF (def. False)",
+        help="print dataset prior to generating the CNF",
     )
     parser.add_argument(
         "-E", "--enumerate", action="store_true",
-        help="enumerate solutions (def. False)",
+        help="enumerate solutions",
     )
     parser.add_argument(
         "-f", "--from-cnf", type=str, default=None,
@@ -532,7 +532,7 @@ def main():
     )
     parser.add_argument(
         "-n", "--n-variables", type=int, default=None,
-        help="random, xor: number of variables (bits)"
+        help="random, xor: number of variables"
     )
     parser.add_argument(
         "-m", "--n-clauses", type=int, default=None,
@@ -610,8 +610,6 @@ def main():
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
         cvec = [_booldot(A[i, :], gvec).simplify()
                 for i in range(len(gvec))]
-
-        # XXX should we also constrain cvec to be concept-wise one-hot?
 
         offset = 0
         for vsize in dataset.domain_sizes:
