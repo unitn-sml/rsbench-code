@@ -363,25 +363,35 @@ def main():
     if args.joint:
         B = exprvars("B", *dataset.domain_sizes)
 
-    # A encodes a function C* -> C
-    # each C* index is mapped into exactly one C index
-    # although multiple C* indices can be mapped to the same C index
-    # (i.e. no OneHot on O's rows)
+    # A (and O) encode a function C* -> C
+    # 1) O is a  map among variables (e.g. "Shape")
+    # 2) A maps one-hot-encoded values among the variables mapped by O
+    # Both maps are non-injective and non-surjective in general.
+    # O is only useful in defining the extra constraint that permutations
+    # of values happen "inside" a single variable (or concept, as its called
+    # in the paper).
+    # I.e. The values of A fully characterize a possible (non-joint) RS.
+
+    # O is a function
     formula = And(*[OneHot(*O[:, k])
                     for k in range(dataset.n_variables)])
 
-    # nzb(k1, k2) = the (k1,k2)-block in A is NON ZERO
-    nzb = lambda k1,k2 : Or(A[k1*2, k2*2], A[k1*2, k2*2 + 1],
-                            A[k1*2 + 1, k2*2], A[k1*2 + 1, k2*2 + 1])
-
-    # all-zero blocks of A must match zero elements of O
-    # not-all-zero blocks of A must match non-zero elements of O
-    formula &= And(*[Equal(O[k1, k2], nzb(k1, k2))
-                     for k1 in range(dataset.n_variables)
-                     for k2 in range(dataset.n_variables)])
-
+    # A is a function    
     formula &= And(*[OneHot(*A[:, i])
                     for i in range(dataset.n_bits)])
+
+    # Mapped values is A are consistent with the variable mapping in O
+    # nzb(k1, k2) = the (k1,k2)-block in A is NON ZERO
+    #nzb = lambda k1,k2 : Or(A[k1*2, k2*2], A[k1*2, k2*2 + 1], A[k1*2 + 1, k2*2], A[k1*2 + 1, k2*2 + 1])
+    nzb = lambda ci, gi : Or(*[A[i, j]
+                               for i in range(sum(dataset.domain_sizes[:ci]), sum(dataset.domain_sizes[:ci+1]))
+                               for j in range(sum(dataset.domain_sizes[:gi]), sum(dataset.domain_sizes[:gi+1]))])
+
+    # This constraint make sure that non-zero blocks in A are consistent
+                                                        
+    formula &= And(*[Equal(O[ci, gi], nzb(ci, gi))
+                     for ci in range(dataset.n_variables)
+                     for gi in range(dataset.n_variables)])
 
     # force RSs to achieve perfect performance on data
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
