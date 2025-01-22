@@ -261,10 +261,41 @@ class XorDataset(Dataset):
         return constraint if y else ~constraint
 
 
+class AddDataset(Dataset):
+    """Class implementing (MNIST) addition."""
+
+    def __init__(self, args):
+        super().__init__(
+            [10, 10],
+            f"mnistadd"
+        )
+
+    def make_data(self):
+        add = lambda x: x[0] + x[1]
+        self.gvecs, self.ys = self._make_all_data(add)
+
+    def load_data(self):
+        raise NotImplementedError()
+
+    def k(self, cvec, y):
+        # NOTE cvec is one-hot of two 10-wise categoricals
+        # NOTE y is categorical
+        # XXX assumes that cvec is one-hot encoded
+
+        avec, bvec = cvec[10:], cvec[:10]
+        constraint = Or(*[
+            And(avec[a], bvec[y - a])
+            for a in range(10)
+            if 0 <= y - a <= 9
+        ])
+        return constraint
+
+
 DATASETS = {
     "cnf": FileCNFDataset,
     "random": RandomCNFDataset,
     "xor": XorDataset,
+    "add": AddDataset,
 }
 
 
