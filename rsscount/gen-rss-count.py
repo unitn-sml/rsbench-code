@@ -291,11 +291,43 @@ class AddDataset(Dataset):
         return constraint.simplify()
 
 
+class SumParityDataset(Dataset):
+    """Class implementing (MNIST) sum-parity."""
+
+    def __init__(self, args):
+        super().__init__(
+            [10, 10],
+            f"sumparity",
+        )
+
+    def make_data(self):
+        sumparity = lambda x: (x[0] + x[1]) % 2
+        self.gvecs, self.ys = self._make_all_data(sumparity)
+
+    def load_data(self):
+        raise NotImplementedError()
+
+    def k(self, cvec, y):
+        # NOTE cvec is one-hot of two 10-wise categoricals
+        # NOTE y is categorical
+        # XXX assumes that cvec is one-hot encoded
+
+        avec, bvec = cvec[10:], cvec[:10]
+        constraint = Or(*[
+            And(avec[a], bvec[b])
+            for a in range(10)
+            for b in range(10)
+            if (a + b) % 2 == y
+        ])
+        return constraint.simplify()
+
+
 DATASETS = {
     "cnf": FileCNFDataset,
     "random": RandomCNFDataset,
     "xor": XorDataset,
     "add": AddDataset,
+    "sumparity": SumParityDataset,
 }
 
 
