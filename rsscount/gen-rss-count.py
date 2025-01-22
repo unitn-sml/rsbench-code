@@ -13,14 +13,14 @@ from pyeda.inter import exprvars, expr2dimacscnf
 from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal
 
 
-def _pp_solution(sol, n_cvars, n_cbits, n_ybits):
+def _pp_solution(sol, dataset):
     """Pretty-print a pyeda model."""
 
-    Asol = np.zeros(shape=(n_cbits, n_cbits),
+    Asol = np.zeros(shape=(dataset.n_bits, dataset.n_bits),
                     dtype=np.uint8)
-    Osol = np.zeros(shape=(n_cvars, n_cvars),
+    Osol = np.zeros(shape=(dataset.n_variables, dataset.n_variables),
                     dtype=np.uint8)
-    Bsol = np.zeros(shape=(n_ybits, n_ybits),
+    Bsol = np.zeros(shape=dataset.domain_sizes,
                     dtype=np.uint8)
 
     for k in sol:
@@ -608,7 +608,7 @@ def main():
     if args.enumerate:
         n_sol = 0
         for sol in formula.satisfy_all():
-            _pp_solution(sol, dataset.n_variables, dataset.n_bits, 2)
+            _pp_solution(sol, dataset)
             print("=" * 78)
             n_sol += 1
 
