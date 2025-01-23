@@ -10,10 +10,23 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils import check_random_state
 
 from pyeda.inter import exprvars, expr2dimacscnf
-from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal
+from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal, Not
 
 
-def _pp_solution(sol, dataset):
+def _B_to_ttable(B):
+    ttable = {}
+
+    for entry, is_y_class in np.ndenumerate(B):
+        x_vals, y = entry[:-1], entry[-1]
+
+        if is_y_class:
+            assert(x_vals not in ttable)
+            ttable[x_vals] = y
+
+    return ttable
+
+
+def _pp_solution(sol, dataset, print_B=True):
     """Pretty-print a pyeda model."""
 
     Asol = np.zeros(shape=(dataset.n_bits, dataset.n_bits),
@@ -31,8 +44,16 @@ def _pp_solution(sol, dataset):
         elif k.name == 'O' and sol[k]:
             Osol[k.indices] = 1
 
-    print("B:")
-    print(Bsol)
+
+    print("domain sizes:", dataset.domain_sizes)
+    print("n_classes:", dataset.n_classes)
+
+    if print_B:
+        print("\ntruth table:")
+        for x, y in _B_to_ttable(Bsol).items():
+            print(x, y)
+        
+    print()    
     print("A:")
     print(Asol)
     print("O:")
@@ -358,7 +379,7 @@ class ClevrDataset(Dataset):
 
     def __init__(self, args):
         super().__init__(
-            [8, 4, 2, 2, 8, 4, 2, 2], # two objects
+            [8, 3, 2, 2, 8, 3, 2, 2], # two objects
             3, # three classes
             f"clevr",
         )
@@ -400,8 +421,8 @@ class ClevrDataset(Dataset):
         # NOTE cvec is one-hot of two objects with four properties each
         # NOTE y is categorical
 
-        col1, sha1, mat1, siz1 = cvec[0:8], cvec[8:12], cvec[12:14], cvec[14:16]
-        col2, sha2, mat2, siz2 = cvec[16:24], cvec[24:28], cvec[28:30], cvec[30:32]
+        col1, sha1, mat1, siz1 = cvec[0:8], cvec[8:11], cvec[11:13], cvec[13:15]
+        col2, sha2, mat2, siz2 = cvec[15:23], cvec[23:26], cvec[26:28], cvec[28:30]
 
         rule1 = And(
             siz1[self.LARGE],
@@ -435,6 +456,75 @@ class ClevrDataset(Dataset):
         return constraint.simplify()
 
 
+
+class TinyClevrDataset(Dataset):
+    """Class implementing a tiny version of Clevr."""
+
+    # Colors
+    RED = 0
+    BLUE = 1
+    GREEN = 2
+
+    # Shapes
+    CUBE = 0
+    SPHERE = 1
+
+    def __init__(self, args):
+        super().__init__(
+            [3, 2], # two objects
+            2, # two classes
+            f"tinyclevr",
+        )
+
+    def make_data(self):
+
+        def clevr(x):
+            col1, sha1 = x
+
+            class1 = (
+                col1 == self.RED and
+                sha1 == self.SPHERE
+            )
+            class2 = (
+                not class1
+            )
+
+            if class1 + class2 != 1:
+                return -1 # invalid, will be discarded in _make_all_data()
+            elif class1:
+                return 0
+            elif class2:
+                return 1
+            else:
+                raise ValueError("what?")
+
+        self.gvecs, self.ys = self._make_all_data(clevr)
+
+    def load_data(self):
+        raise NotImplementedError()
+
+    def k(self, cvec, y):
+        # NOTE cvec is one-hot of two objects with two properties each
+        # NOTE y is categorical
+
+        col1, sha1 = cvec[0:3], cvec[3:5]
+        col2, sha2 = cvec[5:8], cvec[8:10]
+
+        rule1 = And(
+            col1[self.RED],
+            sha1[self.SPHERE]
+        ).simplify()
+        rule2 =  Not(rule1).simplify()
+
+        if y == 0:
+            constraint = And(rule1, ~rule2)
+        elif y == 1:
+            constraint = And(~rule1, rule2)
+
+        return constraint.simplify()
+
+
+
 DATASETS = {
     "cnf": FileCNFDataset,
     "random": RandomCNFDataset,
@@ -442,6 +532,7 @@ DATASETS = {
     "add": AddDataset,
     "sumparity": SumParityDataset,
     "clevr": ClevrDataset,
+    "tinyclevr": TinyClevrDataset,
 }
 
 
@@ -642,7 +733,7 @@ def main():
         n_sol = 0
         for sol in formula.satisfy_all():
             if args.enumerate:
-                _pp_solution(sol, dataset)
+                _pp_solution(sol, dataset, args.joint)
                 print("=" * 78)
             n_sol += 1
 
