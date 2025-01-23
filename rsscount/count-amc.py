@@ -1,5 +1,9 @@
 import argparse
+
 import pyapproxmc as pamc
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import norm
 
 
 def main():
@@ -22,6 +26,8 @@ def main():
                         help="pyapprox confidence")
     parser.add_argument("--seed", type=int, default=1,
                         help="seed number")
+    parser.add_argument("--iter", type=int, default=1,
+                        help="number of iterations")
     args = parser.parse_args()
 
     print(f"reading formula to {args.path}")
@@ -29,13 +35,28 @@ def main():
         lines = list(map(str.strip, fp.readlines()))
 
     print(f"counting @ {args.epsilon}, {args.delta}")
-    counter = pamc.Counter(epsilon=args.epsilon, delta=args.delta, seed=args.seed)
-    for line in lines[1:]:
-        counter.add_clause([lit for lit in map(int, line.split()) if lit != 0])
-    count = counter.count()
-    total = count[0] * 2**count[1]
+    counts = []
+    for i in range(args.iter):
+        counter = pamc.Counter(epsilon=args.epsilon, delta=args.delta, seed=args.seed+i)
+        for line in lines[1:]:
+            counter.add_clause([lit for lit in map(int, line.split()) if lit != 0])
+        count = counter.count()
+        total = count[0] * 2**count[1]
+        iterstr = "" if args.iter == 1 else f"[{i+1}/{args.iter}] "
+        print(f"{iterstr} # of models: {count[0]} * 2**{count[1]}, aka {total}")
+        counts.append(total)
 
-    print(f"# of models: {count[0]} * 2**{count[1]}, aka {total}")
+    if args.iter > 1:
+        PLOT_WIDTH = 2 # times variance
+        PLOT_SMOOTHNESS = 3
+        mean, variance = norm.fit(counts)
+        x = np.linspace(mean - PLOT_WIDTH * variance,
+                        mean + PLOT_WIDTH * variance,
+                        len(counts) * 10 ** PLOT_SMOOTHNESS)
+
+        plt.plot(x, norm.pdf(x, mean, variance), 'r-', label='norm pdf')
+        plt.plot(counts, np.zeros(len(counts)), 'b', linestyle='', marker='x')
+        plt.show()
 
 
 if __name__ == "__main__":
