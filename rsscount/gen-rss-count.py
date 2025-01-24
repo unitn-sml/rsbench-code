@@ -14,8 +14,8 @@ from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal, Not
 
 
 def _B_to_ttable(B):
+    """Turn the joint-reasoning matrix into a truth table."""
     ttable = {}
-
     for entry, is_y_class in np.ndenumerate(B):
         x_vals, y = entry[:-1], entry[-1]
 
@@ -28,10 +28,14 @@ def _B_to_ttable(B):
 
 def _pp_solution(sol, dataset, print_B=True):
     """Pretty-print a pyeda model."""
-
-    Asol = np.zeros(shape=(dataset.n_bits, dataset.n_bits),
+    Asol = np.zeros(shape=(dataset.n_objects * dataset.n_bits,
+                           dataset.n_objects * dataset.n_bits),
                     dtype=np.uint8)
-    Osol = np.zeros(shape=(dataset.n_variables, dataset.n_variables),
+    AOsol = np.zeros(shape=(dataset.n_bits, dataset.n_bits),
+                     dtype=np.uint8)
+    Osol = np.zeros(shape=(dataset.n_objects, dataset.n_objects),
+                    dtype=np.uint8)
+    Vsol = np.zeros(shape=(dataset.n_variables, dataset.n_variables),
                     dtype=np.uint8)
     Bsol = np.zeros(shape=dataset.domain_sizes + [dataset.n_classes],
                     dtype=np.uint8)
@@ -39,8 +43,12 @@ def _pp_solution(sol, dataset, print_B=True):
     for k in sol:
         if k.name == 'A' and sol[k]:
             Asol[k.indices] = 1
-        if k.name == 'B' and sol[k]:
+        elif k.name == 'AO' and sol[k]:
+            AOsol[k.indices] = 1
+        elif k.name == 'B' and sol[k]:
             Bsol[k.indices] = 1
+        elif k.name == 'V' and sol[k]:
+            Vsol[k.indices] = 1
         elif k.name == 'O' and sol[k]:
             Osol[k.indices] = 1
 
@@ -56,6 +64,10 @@ def _pp_solution(sol, dataset, print_B=True):
     print()    
     print("A:")
     print(Asol)
+    print("AO:")
+    print(AOsol)
+    print("V:")
+    print(Vsol)    
     print("O:")
     print(Osol)
 
@@ -113,12 +125,13 @@ def _read_cnf(path):
 class Dataset:
     """Abstract Dataset(task) class."""
 
-    def __init__(self, domain_sizes, n_classes, cnf_path):
+    def __init__(self, n_objects, domain_sizes, n_classes, cnf_path):
         self.domain_sizes = domain_sizes
         self.cnf_path = cnf_path
         self.gvecs, self.ys = None, None
-        self.n_variables = len(domain_sizes) # n variables in total
-        self.n_bits = sum(domain_sizes) # n bits in total
+        self.n_objects = n_objects # how many (homogeneous) objects
+        self.n_variables = len(domain_sizes) # per object
+        self.n_bits = sum(domain_sizes) # per object
         self.n_classes = n_classes
 
     @abstractmethod
@@ -138,7 +151,7 @@ class Dataset:
 
     def _make_all_gs(self):
         return list(it.product(*[
-            list(range(size)) for size in self.domain_sizes
+            list(range(size)) for size in self.n_objects * self.domain_sizes
         ]))
 
     def _make_all_data(self, infer):
@@ -148,7 +161,7 @@ class Dataset:
         gs, ys = np.array(gs), np.array(ys)
 
         gs = OneHotEncoder(
-            categories=[list(range(size)) for size in self.domain_sizes],
+            categories=[list(range(size)) for size in self.n_objects * self.domain_sizes],
             sparse_output=False
         ).fit_transform(gs)
 
@@ -184,8 +197,9 @@ class CNFDataset(Dataset):
             basename = f'rng({args.n_variables},{args.n_clauses},{args.clause_length})'
 
         super().__init__(
-            [2 for _ in range(self.n_variables)],
-            2, # XXX
+            1, # 1 object
+            [2 for _ in range(self.n_variables)], # Boolean vars
+            2, # Boolean  output
             f"cnf_{basename}"
         )
 
@@ -271,8 +285,9 @@ class XorDataset(Dataset):
 
     def __init__(self, args):
         super().__init__(
-            [2 for _ in range(args.n_variables)],
-            2,
+            1, # one object
+            [2 for _ in range(args.n_variables)], # Boolean vars
+            2, # Boolean output
             f"xor{args.n_variables}"
         )
 
@@ -293,8 +308,9 @@ class AddDataset(Dataset):
 
     def __init__(self, args):
         super().__init__(
-            [10, 10],
-            19,
+            2, # two digits
+            [10], # 10 values per digit
+            19, # sum in [0,18]
             f"mnistadd"
         )
 
@@ -324,8 +340,9 @@ class SumParityDataset(Dataset):
 
     def __init__(self, args):
         super().__init__(
-            [10, 10],
-            2,
+            2, # two digits
+            [10], # 10 values per digit
+            2, # parity in {0, 1}
             f"sumparity",
         )
 
@@ -379,7 +396,8 @@ class ClevrDataset(Dataset):
 
     def __init__(self, args):
         super().__init__(
-            [8, 3, 2, 2, 8, 3, 2, 2], # two objects
+            2, # two objects
+            [8, 3, 2, 2], # 4 feats per object
             3, # three classes
             f"clevr",
         )
@@ -471,9 +489,77 @@ class TinyClevrDataset(Dataset):
 
     def __init__(self, args):
         super().__init__(
-            [3, 2], # two objects
+            2, # two objects
+            [3, 2], # two features per object
             2, # two classes
             f"tinyclevr",
+        )
+
+    def make_data(self):
+
+        def clevr(x):
+            col1, sha1, col2, sha2, = x
+
+            class1 = (
+                col1 == self.RED and
+                sha2 == self.SPHERE
+            )
+            class2 = (
+                not class1
+            )
+
+            if class1 + class2 != 1:
+                return -1 # invalid, will be discarded in _make_all_data()
+            elif class1:
+                return 0
+            elif class2:
+                return 1
+            else:
+                raise ValueError("what?")
+
+        self.gvecs, self.ys = self._make_all_data(clevr)
+
+    def load_data(self):
+        raise NotImplementedError()
+
+    def k(self, cvec, y):
+        # NOTE cvec is one-hot of two objects with two properties each
+        # NOTE y is categorical
+
+        col1, sha1 = cvec[0:3], cvec[3:5]
+        col2, sha2 = cvec[5:8], cvec[8:10]
+
+        rule1 = And(
+            col1[self.RED],
+            sha2[self.SPHERE]
+        ).simplify()
+        rule2 =  Not(rule1).simplify()
+
+        if y == 0:
+            constraint = And(rule1, ~rule2)
+        elif y == 1:
+            constraint = And(~rule1, rule2)
+
+        return constraint.simplify()
+
+class MicroClevrDataset(Dataset):
+    """Class implementing a micro version of Clevr."""
+
+    # Colors
+    RED = 0
+    BLUE = 1
+    GREEN = 2
+
+    # Shapes
+    CUBE = 0
+    SPHERE = 1
+
+    def __init__(self, args):
+        super().__init__(
+            1, # one object
+            [3, 2], # two features per object
+            2, # two classes
+            f"microclevr",
         )
 
     def make_data(self):
@@ -508,7 +594,6 @@ class TinyClevrDataset(Dataset):
         # NOTE y is categorical
 
         col1, sha1 = cvec[0:3], cvec[3:5]
-        col2, sha2 = cvec[5:8], cvec[8:10]
 
         rule1 = And(
             col1[self.RED],
@@ -525,6 +610,7 @@ class TinyClevrDataset(Dataset):
 
 
 
+
 DATASETS = {
     "cnf": FileCNFDataset,
     "random": RandomCNFDataset,
@@ -533,6 +619,7 @@ DATASETS = {
     "sumparity": SumParityDataset,
     "clevr": ClevrDataset,
     "tinyclevr": TinyClevrDataset,
+    "microclevr": MicroClevrDataset,
 }
 
 
@@ -550,14 +637,19 @@ def _get_args_string(args):
     return basename
 
 
-def _cat_to_ohe(values, domain_sizes):
+def _cat_to_ohe(values, dataset):
     """One-hot encodes a vector of categorical values."""
-    n_bits = sum(domain_sizes)
-    result = np.zeros(n_bits)
+    n_objs = dataset.n_objects
+    n_vars = dataset.n_variables
+    assert(len(values) == n_objs * n_vars)
+    result = np.zeros(n_objs * sum(dataset.domain_sizes))
     n_bits_filled = 0
-    for i, value in enumerate(values):
-        result[n_bits_filled + value] = 1
-        n_bits_filled += domain_sizes[i]
+    for o in range(n_objs):
+        for v in range(n_vars):
+            value = values[o * n_vars + v]
+            result[n_bits_filled + value] = 1            
+            n_bits_filled += dataset.domain_sizes[v]
+
     return result
 
 
@@ -570,7 +662,7 @@ def _encode_jrs_k(dataset, B, cvec, gty):
     for cval, yval in it.product(dataset._make_all_gs(), range(dataset.n_classes)):
 
         # Create a one-hot copy of the concept values
-        ohe_cval = _cat_to_ohe(cval, dataset.domain_sizes)
+        ohe_cval = _cat_to_ohe(cval, dataset)
 
         # Lookup the entry in B that corresponds to cval and the g-t label
         indices = cval + (yval,)
@@ -663,43 +755,66 @@ def main():
         print(dataset.gvecs)
         print(dataset.ys)
 
-    print(f"Building formula: {len(dataset.gvecs)} gvecs, {dataset.n_bits} bits")
+    print(f"Building formula: {len(dataset.gvecs)} gvecs, {dataset.n_objects * dataset.n_bits} bits")
 
-    # generating the formula encoding the RSs
-    A = exprvars("A", dataset.n_bits, dataset.n_bits)
-    O = exprvars("O", dataset.n_variables, dataset.n_variables)
+    # A encodes a function from GT to learned concepts: C* -> C using a bit-wise OHE representation
+    # Additional constraints to A are added through helper matrices AO, O and V
+    # All matrices define are non-injective and non-surjective functions.
+    # We assume objects and variables to be disentangled.
+    # The values of A fully characterize a possible (non-joint) RS.
+    A = exprvars("A", dataset.n_objects * dataset.n_bits, dataset.n_objects * dataset.n_bits)
+    AO = exprvars("AO", dataset.n_bits, dataset.n_bits)
+    V = exprvars("V", dataset.n_variables, dataset.n_variables)
+    O = exprvars("O", dataset.n_objects, dataset.n_objects)
     if args.joint:
-        B = exprvars("B", *(dataset.domain_sizes + [dataset.n_classes]))
+        B = exprvars("B", *(dataset.n_objects * dataset.domain_sizes + [dataset.n_classes]))
 
-    # A (and O) encode a function C* -> C
-    # 1) O is a  map among variables (e.g. "Shape")
-    # 2) A maps one-hot-encoded values among the variables mapped by O
-    # Both maps are non-injective and non-surjective in general.
-    # O is only useful in defining the extra constraint that permutations
-    # of values happen "inside" a single variable (or concept, as its called
-    # in the paper).
-    # I.e. The values of A fully characterize a possible (non-joint) RS.
+    # O is a function among different objects in input (e.g. CLEVR items or MNIST digits)
+    formula = And(*[OneHot(*O[:, o])
+                    for o in range(dataset.n_objects)])
 
-    # O is a function
-    formula = And(*[OneHot(*O[:, k])
-                    for k in range(dataset.n_variables)])
+    # V is a function among variables (e.g. "Shape")
+    formula = And(*[OneHot(*V[:, v])
+                    for v in range(dataset.n_variables)])
 
-    # A is a function
-    formula &= And(*[OneHot(*A[:, i])
-                    for i in range(dataset.n_bits)])
+    # AO is a function
+    formula &= And(*[OneHot(*AO[:, b])
+                    for b in range(dataset.n_bits)])
 
-    # Mapped values is A are consistent with the variable mapping in O
-    # nzb(k1, k2) = the (k1,k2)-block in A is NON ZERO
-    #nzb = lambda k1,k2 : Or(A[k1*2, k2*2], A[k1*2, k2*2 + 1], A[k1*2 + 1, k2*2], A[k1*2 + 1, k2*2 + 1])
-    nzb = lambda ci, gi : Or(*[A[i, j]
-                               for i in range(sum(dataset.domain_sizes[:ci]), sum(dataset.domain_sizes[:ci+1]))
-                               for j in range(sum(dataset.domain_sizes[:gi]), sum(dataset.domain_sizes[:gi+1]))])
+    # A is a function (now implied by the above and the following constraints)
+    # formula &= And(*[OneHot(*A[:, i])
+    #                for i in range(dataset.n_bits)])
 
-    # This constraint make sure that non-zero blocks in A are consistent
+    # Mapped values in AO are consistent with the variable mapping in V (we assume a disentangled concept extractor)
+    # I.e. AO is a block matrix having non-zero cv,gv-blocks IFF V[cv,gv] = 1
+    AO_nonzero_block = lambda cv, gv : Or(*[AO[i, j]
+                                            for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
+                                            for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
 
-    formula &= And(*[Equal(O[ci, gi], nzb(ci, gi))
-                     for ci in range(dataset.n_variables)
-                     for gi in range(dataset.n_variables)])
+    formula &= And(*[Equal(V[cv, gv], AO_nonzero_block(cv, gv))
+                     for cv in range(dataset.n_variables)
+                     for gv in range(dataset.n_variables)])
+
+    # Mapped values in A are consistent with both AO (i.e. the concept extractor for a single object)
+    # and the object mapping in O (we assume disentangled objects too)
+    # I.e. A is a block matrix having AO as co,go-blocks IFF O[co,go] = 1
+
+    A_zero_block = lambda co, go : And(*[Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j])
+                                         for i in range(dataset.n_bits)
+                                         for j in range(dataset.n_bits)])
+
+    A_AO_block = lambda co, go : And(*[Equal(A[dataset.n_bits * co + i, dataset.n_bits * go + j],
+                                             AO[i, j])
+                                       for i in range(dataset.n_bits)
+                                       for j in range(dataset.n_bits)])
+    
+    formula &= And(*[Implies(Not(O[co, go]), A_zero_block(co, go))
+                     for co in range(dataset.n_objects)
+                     for go in range(dataset.n_objects)])
+
+    formula &= And(*[Implies(O[co, go], A_AO_block(co, go))
+                     for co in range(dataset.n_objects)
+                     for go in range(dataset.n_objects)])
 
     # force RSs to achieve perfect performance on data
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
