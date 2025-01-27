@@ -37,7 +37,7 @@ def _pp_solution(sol, dataset, print_B=True):
                     dtype=np.uint8)
     Vsol = np.zeros(shape=(dataset.n_variables, dataset.n_variables),
                     dtype=np.uint8)
-    Bsol = np.zeros(shape=dataset.domain_sizes + [dataset.n_classes],
+    Bsol = np.zeros(shape= dataset.n_objects * dataset.domain_sizes + [dataset.n_classes],
                     dtype=np.uint8)
 
     for k in sol:
@@ -501,8 +501,8 @@ class TinyClevrDataset(Dataset):
             col1, sha1, col2, sha2, = x
 
             class1 = (
-                col1 == self.RED and
-                sha2 == self.SPHERE
+                col1 == self.RED and sha1 == self.CUBE and
+                col2 == self.BLUE and sha2 == self.SPHERE
             )
             class2 = (
                 not class1
@@ -531,7 +531,9 @@ class TinyClevrDataset(Dataset):
 
         rule1 = And(
             col1[self.RED],
-            sha2[self.SPHERE]
+            sha1[self.CUBE],
+            col2[self.BLUE],
+            sha2[self.SPHERE],
         ).simplify()
         rule2 =  Not(rule1).simplify()
 
@@ -550,14 +552,10 @@ class MicroClevrDataset(Dataset):
     BLUE = 1
     GREEN = 2
 
-    # Shapes
-    CUBE = 0
-    SPHERE = 1
-
     def __init__(self, args):
         super().__init__(
-            1, # one object
-            [3, 2], # two features per object
+            2, # two object
+            [3], # one feature per object (3 colors)
             2, # two classes
             f"microclevr",
         )
@@ -565,11 +563,11 @@ class MicroClevrDataset(Dataset):
     def make_data(self):
 
         def clevr(x):
-            col1, sha1 = x
+            col1, col2 = x
 
             class1 = (
                 col1 == self.RED and
-                sha1 == self.SPHERE
+                col2 == self.RED
             )
             class2 = (
                 not class1
@@ -593,11 +591,11 @@ class MicroClevrDataset(Dataset):
         # NOTE cvec is one-hot of two objects with two properties each
         # NOTE y is categorical
 
-        col1, sha1 = cvec[0:3], cvec[3:5]
+        col1, col2 = cvec[0:3], cvec[3:6]
 
         rule1 = And(
             col1[self.RED],
-            sha1[self.SPHERE]
+            col2[self.RED]
         ).simplify()
         rule2 =  Not(rule1).simplify()
 
@@ -772,9 +770,12 @@ def main():
     # O is a function among different objects in input (e.g. CLEVR items or MNIST digits)
     formula = And(*[OneHot(*O[:, o])
                     for o in range(dataset.n_objects)])
+    # O is also injective
+    formula &= And(*[OneHot(*O[o, :])
+                    for o in range(dataset.n_objects)])
 
     # V is a function among variables (e.g. "Shape")
-    formula = And(*[OneHot(*V[:, v])
+    formula &= And(*[OneHot(*V[:, v])
                     for v in range(dataset.n_variables)])
 
     # AO is a function
@@ -782,8 +783,8 @@ def main():
                     for b in range(dataset.n_bits)])
 
     # A is a function (now implied by the above and the following constraints)
-    # formula &= And(*[OneHot(*A[:, i])
-    #                for i in range(dataset.n_bits)])
+    formula &= And(*[OneHot(*A[:, i])
+                    for i in range(dataset.n_bits)])
 
     # Mapped values in AO are consistent with the variable mapping in V (we assume a disentangled concept extractor)
     # I.e. AO is a block matrix having non-zero cv,gv-blocks IFF V[cv,gv] = 1
