@@ -13,6 +13,19 @@ from pyeda.inter import exprvars, expr2dimacscnf
 from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal, Not
 
 
+def MyOneHot(*variables):
+    onehotcnf = [Or(*variables)]
+    for i in range(len(variables)-1):
+        for j in range(i+1, len(variables)):
+            onehotcnf.append(
+                Or(Not(variables[i]),
+                   Not(variables[j])))
+
+    return And(*onehotcnf)
+
+OneHot = MyOneHot
+
+
 def _B_to_ttable(B):
     """Turn the joint-reasoning matrix into a truth table."""
     ttable = {}
@@ -788,6 +801,7 @@ def main():
 
     # Mapped values in AO are consistent with the variable mapping in V (we assume a disentangled concept extractor)
     # I.e. AO is a block matrix having non-zero cv,gv-blocks IFF V[cv,gv] = 1
+    """
     AO_nonzero_block = lambda cv, gv : Or(*[AO[i, j]
                                             for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
                                             for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
@@ -795,27 +809,61 @@ def main():
     formula &= And(*[Equal(V[cv, gv], AO_nonzero_block(cv, gv))
                      for cv in range(dataset.n_variables)
                      for gv in range(dataset.n_variables)])
+    """
+    formula &= And(*[Or(Not(V[cv, gv]), *[AO[i, j]
+                                          for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
+                                          for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
+                     for cv in range(dataset.n_variables)
+                     for gv in range(dataset.n_variables)])
+
+    formula &= And(*[Or(V[cv, gv], Not(AO[i, j]))
+                     for cv in range(dataset.n_variables)
+                     for gv in range(dataset.n_variables)
+                     for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
+                     for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))
+                     ])
 
     # Mapped values in A are consistent with both AO (i.e. the concept extractor for a single object)
     # and the object mapping in O (we assume disentangled objects too)
     # I.e. A is a block matrix having AO as co,go-blocks IFF O[co,go] = 1
 
+    """
     A_zero_block = lambda co, go : And(*[Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j])
                                          for i in range(dataset.n_bits)
                                          for j in range(dataset.n_bits)])
+
+    formula &= And(*[Implies(Not(O[co, go]), A_zero_block(co, go))
+                     for co in range(dataset.n_objects)
+                     for go in range(dataset.n_objects)])
 
     A_AO_block = lambda co, go : And(*[Equal(A[dataset.n_bits * co + i, dataset.n_bits * go + j],
                                              AO[i, j])
                                        for i in range(dataset.n_bits)
                                        for j in range(dataset.n_bits)])
     
-    formula &= And(*[Implies(Not(O[co, go]), A_zero_block(co, go))
-                     for co in range(dataset.n_objects)
-                     for go in range(dataset.n_objects)])
 
     formula &= And(*[Implies(O[co, go], A_AO_block(co, go))
                      for co in range(dataset.n_objects)
                      for go in range(dataset.n_objects)])
+
+    """
+
+    formula &= And(*[Or(O[co, go], Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j]))
+                     for co in range(dataset.n_objects)
+                     for go in range(dataset.n_objects)
+                     for i in range(dataset.n_bits)
+                     for j in range(dataset.n_bits)])
+
+    formula &= And(*[And(Or(Not(O[co, go]),
+                            Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j]),
+                            AO[i, j]),
+                         Or(Not(O[co, go]),
+                            A[dataset.n_bits * co + i, dataset.n_bits * go + j],
+                            Not(AO[i, j])))
+                     for co in range(dataset.n_objects)
+                     for go in range(dataset.n_objects)
+                     for i in range(dataset.n_bits)
+                     for j in range(dataset.n_bits)])
 
     # force RSs to achieve perfect performance on data
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
@@ -824,13 +872,13 @@ def main():
 
         offset = 0
         for vsize in dataset.domain_sizes:
-            formula &= OneHot(*cvec[offset:offset+vsize])
+            formula &= OneHot(*cvec[offset:offset+vsize]).to_cnf()
             offset += vsize
 
         if not args.joint:
-            formula &= dataset.k(cvec, y)
+            formula &= dataset.k(cvec, y).to_cnf()
         else:
-            formula &= _encode_jrs_k(dataset, B, cvec, y)
+            formula &= _encode_jrs_k(dataset, B, cvec, y).to_cnf()
 
         if has_csup:
             for i in range(dataset.n_bits):
@@ -838,8 +886,8 @@ def main():
 
     # export the formula in DIMACS format
     print("converting formula to CNF...")
-    _, cnf = expr2dimacscnf(formula.tseitin().to_cnf())
-
+    #_, cnf = expr2dimacscnf(formula.tseitin().to_cnf())
+    _, cnf = expr2dimacscnf(formula.simplify())
     print(f"writing formula to {cnf_path}")
     with open(cnf_path, "wt") as fp:
         fp.write(str(cnf))
