@@ -10,7 +10,8 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils import check_random_state
 
 from pyeda.inter import exprvars, expr2dimacscnf
-from pyeda.inter import And, Or, Xor, Implies, OneHot, Equal, Not
+from pyeda.inter import And, Or, Xor, Implies, Equal, Not
+from pyeda.inter import OneHot as PyEDAOneHot
 
 
 def MyOneHot(*variables):
@@ -22,8 +23,6 @@ def MyOneHot(*variables):
                    Not(variables[j])))
 
     return And(*onehotcnf)
-
-OneHot = MyOneHot
 
 
 def _B_to_ttable(B):
@@ -515,7 +514,7 @@ class TinyClevrDataset(Dataset):
 
             class1 = (
                 col1 == self.RED and sha1 == self.CUBE and
-                col2 == self.BLUE and sha2 == self.SPHERE
+                col2 == self.BLUE
             )
             class2 = (
                 not class1
@@ -545,8 +544,7 @@ class TinyClevrDataset(Dataset):
         rule1 = And(
             col1[self.RED],
             sha1[self.CUBE],
-            col2[self.BLUE],
-            sha2[self.SPHERE],
+            col2[self.BLUE]
         ).simplify()
         rule2 =  Not(rule1).simplify()
 
@@ -580,7 +578,7 @@ class MicroClevrDataset(Dataset):
 
             class1 = (
                 col1 == self.RED and
-                col2 == self.RED
+                col2 == self.BLUE
             )
             class2 = (
                 not class1
@@ -608,7 +606,7 @@ class MicroClevrDataset(Dataset):
 
         rule1 = And(
             col1[self.RED],
-            col2[self.RED]
+            col2[self.BLUE]
         ).simplify()
         rule2 =  Not(rule1).simplify()
 
@@ -639,6 +637,7 @@ def _get_args_string(args):
         ("J", args.joint),
         ("s", args.subsample),
         ("c", args.concept_sup),
+        ("T", args.tseitin),
         (None, args.seed),
     ]
     basename = '__'.join([
@@ -744,6 +743,11 @@ def main():
         "--seed", type=int, default=1,
         help="RNG seed"
     )
+    parser.add_argument(
+        "--tseitin", default=False,
+        action="store_true",
+        help="Use Tseitin encoding"
+    )
     args = parser.parse_args()
 
     # generating the dataset/task
@@ -780,6 +784,10 @@ def main():
     if args.joint:
         B = exprvars("B", *(dataset.n_objects * dataset.domain_sizes + [dataset.n_classes]))
 
+
+
+    OneHot = PyEDAOneHot if not args.tseitin else MyOneHot
+
     # O is a function among different objects in input (e.g. CLEVR items or MNIST digits)
     formula = And(*[OneHot(*O[:, o])
                     for o in range(dataset.n_objects)])
@@ -801,84 +809,87 @@ def main():
 
     # Mapped values in AO are consistent with the variable mapping in V (we assume a disentangled concept extractor)
     # I.e. AO is a block matrix having non-zero cv,gv-blocks IFF V[cv,gv] = 1
-    """
-    AO_nonzero_block = lambda cv, gv : Or(*[AO[i, j]
-                                            for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
-                                            for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
+    if args.tseitin:
+        AO_nonzero_block = lambda cv, gv : Or(*[AO[i, j]
+                                                for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
+                                                for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
 
-    formula &= And(*[Equal(V[cv, gv], AO_nonzero_block(cv, gv))
-                     for cv in range(dataset.n_variables)
-                     for gv in range(dataset.n_variables)])
-    """
-    formula &= And(*[Or(Not(V[cv, gv]), *[AO[i, j]
-                                          for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
-                                          for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
-                     for cv in range(dataset.n_variables)
-                     for gv in range(dataset.n_variables)])
+        formula &= And(*[Equal(V[cv, gv], AO_nonzero_block(cv, gv))
+                         for cv in range(dataset.n_variables)
+                         for gv in range(dataset.n_variables)])
 
-    formula &= And(*[Or(V[cv, gv], Not(AO[i, j]))
-                     for cv in range(dataset.n_variables)
-                     for gv in range(dataset.n_variables)
-                     for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
-                     for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))
-                     ])
+    else:
+        formula &= And(*[Or(Not(V[cv, gv]), *[AO[i, j]
+                                              for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
+                                              for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))])
+                         for cv in range(dataset.n_variables)
+                         for gv in range(dataset.n_variables)])
+
+        formula &= And(*[Or(V[cv, gv], Not(AO[i, j]))
+                         for cv in range(dataset.n_variables)
+                         for gv in range(dataset.n_variables)
+                         for i in range(sum(dataset.domain_sizes[:cv]), sum(dataset.domain_sizes[:cv+1]))
+                         for j in range(sum(dataset.domain_sizes[:gv]), sum(dataset.domain_sizes[:gv+1]))
+                         ])
 
     # Mapped values in A are consistent with both AO (i.e. the concept extractor for a single object)
     # and the object mapping in O (we assume disentangled objects too)
     # I.e. A is a block matrix having AO as co,go-blocks IFF O[co,go] = 1
+    if args.tseitin:
+        A_zero_block = lambda co, go : And(*[Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j])
+                                             for i in range(dataset.n_bits)
+                                             for j in range(dataset.n_bits)])
 
-    """
-    A_zero_block = lambda co, go : And(*[Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j])
-                                         for i in range(dataset.n_bits)
-                                         for j in range(dataset.n_bits)])
+        formula &= And(*[Implies(Not(O[co, go]), A_zero_block(co, go))
+                         for co in range(dataset.n_objects)
+                         for go in range(dataset.n_objects)])
 
-    formula &= And(*[Implies(Not(O[co, go]), A_zero_block(co, go))
-                     for co in range(dataset.n_objects)
-                     for go in range(dataset.n_objects)])
-
-    A_AO_block = lambda co, go : And(*[Equal(A[dataset.n_bits * co + i, dataset.n_bits * go + j],
+        A_AO_block = lambda co, go : And(*[Equal(A[dataset.n_bits * co + i, dataset.n_bits * go + j],
                                              AO[i, j])
-                                       for i in range(dataset.n_bits)
-                                       for j in range(dataset.n_bits)])
+                                           for i in range(dataset.n_bits)
+                                           for j in range(dataset.n_bits)])
     
+        formula &= And(*[Implies(O[co, go], A_AO_block(co, go))
+                         for co in range(dataset.n_objects)
+                         for go in range(dataset.n_objects)])
 
-    formula &= And(*[Implies(O[co, go], A_AO_block(co, go))
-                     for co in range(dataset.n_objects)
-                     for go in range(dataset.n_objects)])
+    else:
+        formula &= And(*[Or(O[co, go], Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j]))
+                         for co in range(dataset.n_objects)
+                         for go in range(dataset.n_objects)
+                         for i in range(dataset.n_bits)
+                         for j in range(dataset.n_bits)])
 
-    """
-
-    formula &= And(*[Or(O[co, go], Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j]))
-                     for co in range(dataset.n_objects)
-                     for go in range(dataset.n_objects)
-                     for i in range(dataset.n_bits)
-                     for j in range(dataset.n_bits)])
-
-    formula &= And(*[And(Or(Not(O[co, go]),
-                            Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j]),
-                            AO[i, j]),
-                         Or(Not(O[co, go]),
-                            A[dataset.n_bits * co + i, dataset.n_bits * go + j],
-                            Not(AO[i, j])))
-                     for co in range(dataset.n_objects)
-                     for go in range(dataset.n_objects)
-                     for i in range(dataset.n_bits)
-                     for j in range(dataset.n_bits)])
+        formula &= And(*[And(Or(Not(O[co, go]),
+                                Not(A[dataset.n_bits * co + i, dataset.n_bits * go + j]),
+                                AO[i, j]),
+                             Or(Not(O[co, go]),
+                                A[dataset.n_bits * co + i, dataset.n_bits * go + j],
+                                Not(AO[i, j])))
+                         for co in range(dataset.n_objects)
+                         for go in range(dataset.n_objects)
+                         for i in range(dataset.n_bits)
+                         for j in range(dataset.n_bits)])
 
     # force RSs to achieve perfect performance on data
     for gvec, y, has_csup in zip(dataset.gvecs, dataset.ys, csup_mask):
+
         cvec = [_booldot(A[i, :], gvec).simplify()
                 for i in range(len(gvec))]
 
         offset = 0
         for vsize in dataset.domain_sizes:
-            formula &= OneHot(*cvec[offset:offset+vsize]).to_cnf()
+            ohevar = OneHot(*cvec[offset:offset+vsize])
+            formula &= (ohevar if args.tseitin else ohevar.to_cnf())
             offset += vsize
 
         if not args.joint:
-            formula &= dataset.k(cvec, y).to_cnf()
+            correct_prediction = dataset.k(cvec, y)
+
         else:
-            formula &= _encode_jrs_k(dataset, B, cvec, y).to_cnf()
+            correct_prediction = _encode_jrs_k(dataset, B, cvec, y)
+
+        formula &= (correct_prediction if args.tseitin else correct_prediction.to_cnf())
 
         if has_csup:
             for i in range(dataset.n_bits):
@@ -886,8 +897,15 @@ def main():
 
     # export the formula in DIMACS format
     print("converting formula to CNF...")
-    #_, cnf = expr2dimacscnf(formula.tseitin().to_cnf())
-    _, cnf = expr2dimacscnf(formula.simplify())
+    if args.tseitin:
+        _, cnf = expr2dimacscnf(formula.tseitin().to_cnf())
+    else:
+        _, cnf = expr2dimacscnf(formula.simplify())
+
+
+    print("ENCODING SUPPORT:", len(formula.support))
+    print("ENCODING INPUTS:", len(formula.inputs))
+
     print(f"writing formula to {cnf_path}")
     with open(cnf_path, "wt") as fp:
         fp.write(str(cnf))
@@ -902,7 +920,6 @@ def main():
             n_sol += 1
 
         print(f"{n_sol} solutions")
-
 
 if __name__ == "__main__":
     main()
