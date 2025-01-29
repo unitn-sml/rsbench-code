@@ -555,20 +555,16 @@ class TinyClevrDataset(Dataset):
 
         return constraint.simplify()
 
-class MicroClevrDataset(Dataset):
-    """Class implementing a micro version of Clevr."""
+class DebugDataset(Dataset):
+    """Class implementing a debug version of TinyClevr."""
 
-    # Colors
-    RED = 0
-    BLUE = 1
-    GREEN = 2
 
     def __init__(self, args):
         super().__init__(
-            2, # two object
-            [3], # one feature per object (3 colors)
+            2, # two objects
+            [args.n_variables], # one feature per object (n colors)
             2, # two classes
-            f"microclevr",
+            f"debug{args.n_variables}",
         )
 
     def make_data(self):
@@ -577,15 +573,15 @@ class MicroClevrDataset(Dataset):
             col1, col2 = x
 
             class1 = (
-                col1 == self.RED and
-                col2 == self.BLUE
+                col1 == 0 and col2 == 0 # same color
             )
             class2 = (
                 not class1
             )
 
             if class1 + class2 != 1:
-                return -1 # invalid, will be discarded in _make_all_data()
+                #return -1 # invalid, will be discarded in _make_all_data()
+                raise ValueError("why?")
             elif class1:
                 return 0
             elif class2:
@@ -601,13 +597,10 @@ class MicroClevrDataset(Dataset):
     def k(self, cvec, y):
         # NOTE cvec is one-hot of two objects with two properties each
         # NOTE y is categorical
+        ncols = self.domain_sizes[0]
+        col1, col2 = cvec[0:ncols], cvec[ncols:ncols*2]
 
-        col1, col2 = cvec[0:3], cvec[3:6]
-
-        rule1 = And(
-            col1[self.RED],
-            col2[self.BLUE]
-        ).simplify()
+        rule1 = And(col1[0], col2[0]).simplify()
         rule2 =  Not(rule1).simplify()
 
         if y == 0:
@@ -628,7 +621,7 @@ DATASETS = {
     "sumparity": SumParityDataset,
     "clevr": ClevrDataset,
     "tinyclevr": TinyClevrDataset,
-    "microclevr": MicroClevrDataset,
+    "debug": DebugDataset,
 }
 
 
