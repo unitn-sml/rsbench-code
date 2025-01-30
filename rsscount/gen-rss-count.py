@@ -162,9 +162,7 @@ class Dataset:
         pass
 
     def _make_all_gs(self):
-        return list(it.product(*[
-            list(range(size)) for size in self.n_objects * self.domain_sizes
-        ]))
+        return list(it.product(*[list(range(size)) for size in self.n_objects * self.domain_sizes]))
 
     def _make_all_data(self, infer):
         """Generates all possible ground-truh concept vectors and labels."""
@@ -611,8 +609,6 @@ class DebugDataset(Dataset):
         return constraint.simplify()
 
 
-
-
 DATASETS = {
     "cnf": FileCNFDataset,
     "random": RandomCNFDataset,
@@ -655,32 +651,53 @@ def _cat_to_ohe(values, dataset):
 
     return result
 
-
-def _encode_jrs_k(dataset, B, cvec, gty):
+def _encode_jrs_k(dataset, A, B, cvec, gty, count_equivalent_b=False):
     """Encodes the JRS counting problem.  gty is the (categorical) g-t label."""
     formula = True
 
     # Iterate over all possible combinations of concepts and labels; this
     # covers the entirety of B.
-    for cval, yval in it.product(dataset._make_all_gs(), range(dataset.n_classes)):
+    
+    #for cval, yval in it.product(dataset._make_all_gs(), range(dataset.n_classes)):
+    for cval in dataset._make_all_gs():
 
-        # Create a one-hot copy of the concept values
-        ohe_cval = _cat_to_ohe(cval, dataset)
+        if count_equivalent_b:
+            formula &= MyOneHot(*[B[cval + (yval,)] for yval in range(dataset.n_classes)])
+        else:
+            assigned_class = MyOneHot(*[B[cval + (yval,)] for yval in range(dataset.n_classes)])
+            unassigned_class = And(*[Not(B[cval + (yval,)]) for yval in range(dataset.n_classes)])
+            
+            active_tt_entry = True
+            for o in range(dataset.n_objects):
+                for i, size_i in enumerate(dataset.domain_sizes):
+                    xi = cval[o * len(dataset.domain_sizes) + i]
+                    row_xi = (o * sum(dataset.domain_sizes)
+                              + sum(dataset.domain_sizes[:i])
+                              + xi)
+                    active_tt_entry &= Or(*A[row_xi, :])
+            
+            formula &= Implies(active_tt_entry, assigned_class)
+            formula &= Implies(Not(active_tt_entry), unassigned_class)
+            
+        
+        for yval in range(dataset.n_classes):
+            # Create a one-hot copy of the concept values
+            ohe_cval = _cat_to_ohe(cval, dataset)
+        
+            # Lookup the entry in B that corresponds to cval and the g-t label
+            indices = cval + (yval,)
+            entry = B[indices]
 
-        # Lookup the entry in B that corresponds to cval and the g-t label
-        indices = cval + (yval,)
-        entry = B[indices]
+            # Do the symbolic concepts activate this entry?
+            active = _all_equal(cvec, ohe_cval)
 
-        # Do the symbolic concepts activate this entry?
-        active = _all_equal(cvec, ohe_cval)
+            # Does the entry predict the g-t label?
+            matches_gt = yval == gty
 
-        # Does the entry predict the g-t label?
-        matches_gt = yval == gty
-
-        # If the entry of B is active (i.e., it is selected by the symbolic
-        # concepts), then it must predict the g-t label otherwise it cannot
-        # be the g-t label.
-        formula &= Implies(active, entry if matches_gt else ~entry)
+            # If the entry of B is active (i.e., it is selected by the symbolic
+            # concepts), then it must predict the g-t label otherwise it cannot
+            # be the g-t label.
+            formula &= Implies(active, entry if matches_gt else ~entry)
 
     return formula.simplify()
 
@@ -776,8 +793,6 @@ def main():
     O = exprvars("O", dataset.n_objects, dataset.n_objects)
     if args.joint:
         B = exprvars("B", *(dataset.n_objects * dataset.domain_sizes + [dataset.n_classes]))
-
-
 
     OneHot = MyOneHot if args.avoid_tseitin else PyEDAOneHot 
 
@@ -881,7 +896,7 @@ def main():
             correct_prediction = dataset.k(cvec, y)
 
         else:
-            correct_prediction = _encode_jrs_k(dataset, B, cvec, y)
+            correct_prediction = _encode_jrs_k(dataset, A, B, cvec, y)
 
         formula &= (correct_prediction.to_cnf() if args.avoid_tseitin else correct_prediction)
 
