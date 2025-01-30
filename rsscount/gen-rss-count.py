@@ -317,11 +317,12 @@ class AddDataset(Dataset):
     """Class implementing (MNIST) addition."""
 
     def __init__(self, args):
+        # args.n_variables repurposed as number of digit values
         super().__init__(
             2, # two digits
-            [10], # 10 values per digit
-            19, # sum in [0,18]
-            f"mnistadd"
+            [args.n_variables], # N values per digit
+            1 + 2*(args.n_variables-1), # sum in [0,2N-2]
+            f"mnistadd{args.n_variables}"
         )
 
     def make_data(self):
@@ -336,11 +337,12 @@ class AddDataset(Dataset):
         # NOTE y is categorical
         # XXX assumes that cvec is one-hot encoded
 
-        avec, bvec = cvec[10:], cvec[:10]
+        ndigits = self.domain_sizes[0]
+        avec, bvec = cvec[ndigits:], cvec[:ndigits]
         constraint = Or(*[
             And(avec[a], bvec[y - a])
-            for a in range(10)
-            if 0 <= y - a <= 9
+            for a in range(ndigits)
+            if 0 <= y - a <= (ndigits - 1)
         ])
         return constraint.simplify()
 
@@ -349,11 +351,12 @@ class SumParityDataset(Dataset):
     """Class implementing (MNIST) sum-parity."""
 
     def __init__(self, args):
+        # args.n_variables repurposed as number of digit values
         super().__init__(
             2, # two digits
-            [10], # 10 values per digit
+            [args.n_variables], # N values per digit
             2, # parity in {0, 1}
-            f"sumparity",
+            f"sumparity{args.n_variables}",
         )
 
     def make_data(self):
@@ -367,12 +370,13 @@ class SumParityDataset(Dataset):
         # NOTE cvec is one-hot of two 10-wise categoricals
         # NOTE y is categorical
         # XXX assumes that cvec is one-hot encoded
-
-        avec, bvec = cvec[10:], cvec[:10]
+        ndigits = self.domain_sizes[0]
+        avec, bvec = cvec[ndigits:], cvec[:ndigits]
+        #print("CVEC", cvec, "\n\n")
         constraint = Or(*[
             And(avec[a], bvec[b])
-            for a in range(10)
-            for b in range(10)
+            for a in range(ndigits)
+            for b in range(ndigits)
             if (a + b) % 2 == y
         ])
         return constraint.simplify()
@@ -408,7 +412,7 @@ class ClevrDataset(Dataset):
         super().__init__(
             2, # two objects
             [8, 3, 2, 2], # 4 feats per object
-            3, # three classes
+            2,
             f"clevr",
         )
 
@@ -418,10 +422,13 @@ class ClevrDataset(Dataset):
             col1, sha1, mat1, siz1 = x[:4]
             col2, sha2, mat2, siz2 = x[4:]
 
-            class1 = (
+            positive_class1 = (
                 siz1 == self.LARGE and sha1 == self.CUBE and
                 siz2 == self.LARGE and sha2 == self.CYLINDER
             )
+            return int(positive_class1)
+
+            '''
             class2 = (
                 siz1 == self.SMALL and mat1 == self.METAL and sha1 == self.CUBE and
                 siz2 == self.SMALL and sha2 == self.SPHERE
@@ -430,15 +437,21 @@ class ClevrDataset(Dataset):
                 siz1 == self.LARGE and col1 == self.BLUE and sha1 == self.SPHERE and
                 siz2 == self.SMALL and col2 == self.YELLOW and sha2 == self.SPHERE
             )
+            class4 = (
+                (not class1) and (not class2) and (not class3)
+            )
 
-            if class1 + class2 + class3 != 1:
-                return -1 # invalid, will be discarded in _make_all_data()
+            if class1 + class2 + class3 + class4 != 1:
+                raise ValueError("this shouldn't happen")
             elif class1:
                 return 0
             elif class2:
                 return 1
-            else:
+            elif class3:
                 return 2
+            else:
+                return 3
+            '''
 
         self.gvecs, self.ys = self._make_all_data(clevr)
 
@@ -627,6 +640,7 @@ def _get_args_string(args):
         ("s", args.subsample),
         ("c", args.concept_sup),
         ("T", not args.avoid_tseitin),
+        ("B", args.count_equivalent_b),
         (None, args.seed),
     ]
     basename = '__'.join([
@@ -711,6 +725,11 @@ def main():
     )
     parser.add_argument(
         "-J", "--joint", action="store_true",
+        help="count joint reasoning shortcuts",
+    )
+    parser.add_argument(
+        "-B", "--count-equivalent-b", action="store_true",
+        default=False,
         help="count joint reasoning shortcuts",
     )
     parser.add_argument(
@@ -896,7 +915,8 @@ def main():
             correct_prediction = dataset.k(cvec, y)
 
         else:
-            correct_prediction = _encode_jrs_k(dataset, A, B, cvec, y)
+            correct_prediction = _encode_jrs_k(dataset, A, B, cvec, y,
+                                               count_equivalent_b=args.count_equivalent_b)
 
         formula &= (correct_prediction.to_cnf() if args.avoid_tseitin else correct_prediction)
 
