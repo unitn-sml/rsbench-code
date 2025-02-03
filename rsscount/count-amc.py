@@ -28,6 +28,8 @@ def main():
                         help="seed number")
     parser.add_argument("--iter", type=int, default=1,
                         help="number of iterations")
+    parser.add_argument("--plot", action="store_true", default=False,
+                        help="Plot results")
     args = parser.parse_args()
 
     print(f"reading formula to {args.path}")
@@ -47,16 +49,22 @@ def main():
         counts.append(total)
 
     if args.iter > 1:
-        PLOT_WIDTH = 2 # times variance
-        PLOT_SMOOTHNESS = 3
-        mean, variance = norm.fit(counts)
-        x = np.linspace(mean - PLOT_WIDTH * variance,
-                        mean + PLOT_WIDTH * variance,
-                        len(counts) * 10 ** PLOT_SMOOTHNESS)
 
-        plt.plot(x, norm.pdf(x, mean, variance), 'r-', label='norm pdf')
-        plt.plot(counts, np.zeros(len(counts)), 'b', linestyle='', marker='x')
-        plt.show()
+        mean, variance = norm.fit(counts)
+
+        if args.plot:
+            PLOT_WIDTH = 2 # times variance
+            PLOT_SMOOTHNESS = 3
+
+            x = np.linspace(mean - PLOT_WIDTH * variance,
+                            mean + PLOT_WIDTH * variance,
+                            len(counts) * 10 ** PLOT_SMOOTHNESS)
+
+            plt.plot(x, norm.pdf(x, mean, variance), 'r-', label='norm pdf')
+            plt.plot(counts, np.zeros(len(counts)), 'b', linestyle='', marker='x')
+            plt.show()
+
+        print(f"Result: {mean} +- {np.sqrt(variance)}")
 
 
 if __name__ == "__main__":
