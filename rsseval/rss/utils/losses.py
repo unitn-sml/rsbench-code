@@ -838,3 +838,50 @@ def MNMATH_Cumulative(out_dict: dict, args):
         losses.update(losses3)
 
     return loss + args.gamma * mitigation, losses
+
+
+def RAVEN_Concept_Match(out_dict: dict):
+    """RAVEN concept supervision loss on the 8 context panels only.
+
+    Applies per-attribute CrossEntropyLoss on the raw encoder logits (CS)
+    against ground-truth concept labels (CONCEPTS). Only the 8 context panels
+    (indices 0-7) are supervised; the 8 candidate panels are left unsupervised
+    so the model learns to score them through symbolic reasoning, not direct
+    concept supervision.
+
+    Attribute layout in z: Type(3) | Size(3) | Color(3) = 9 total
+
+    Args:
+        out_dict: output dictionary containing:
+            "CS" [B, 16, n_facts]: raw encoder logits
+            "CONCEPTS" [B, 16, n_attrs]: ground-truth concept indices
+
+    Returns:
+        loss: scalar loss value (averaged over attributes)
+        losses: dictionary with "c-loss" entry
+    """
+    # Only supervise context panels (0-7), not the 8 candidate choices
+    z = out_dict["CS"][:, :8]            # [B, 8, n_facts]
+    targets = out_dict["CONCEPTS"][:, :8].to(torch.long)  # [B, 8, n_attrs]
+
+    loss_f = torch.nn.CrossEntropyLoss()
+
+    # Type: logits [0:3], target column 0
+    z_type = z[..., 0:3]
+    l_type = loss_f(z_type.reshape(-1, 3), targets[..., 0].reshape(-1))
+
+    # Size: logits [3:6], target column 1
+    z_size = z[..., 3:6]
+    l_size = loss_f(z_size.reshape(-1, 3), targets[..., 1].reshape(-1))
+
+    # Color: logits [6:9], target column 2
+    z_color = z[..., 6:9]
+    l_color = loss_f(z_color.reshape(-1, 3), targets[..., 2].reshape(-1))
+
+    n_attrs = 3
+    loss = l_type + l_size + l_color
+
+    # Average over attributes
+    loss /= n_attrs
+
+    return loss, {"c-loss": loss.item()}
