@@ -133,6 +133,12 @@ To evaluate different models or datasets, follow this pattern:
 
 To evaluate your model, start by training several instances with different seed values. This will ensure a robust evaluation by averaging results across various seeds. We provide an easy-to-use notebook in the `notebooks` directory for this purpose. You can find the evaluation notebook [here](rss/notebooks/evaluate.ipynb). Simply follow the instructions within the notebook to assess your model's performance.
 
+For NN/CLIP models, concept-level metrics must be extracted this way instead of using evaluate.ipynb:
+- Train model
+- Run TCAV main.py
+- Run analysis.ipynb
+- Extract Concept Acc, F1, Collapse
+
 ## Hyperparameter Tuning
 
 Our repository also supports hyperparameter tuning using a Bayesian search strategy. To begin tuning, use the `--tuning` flag:

@@ -9,6 +9,12 @@ from pad import PadCoinToss, PadLeftDefine, PadRightDefine
 from collections import OrderedDict
 from torch.utils.data import DataLoader
 
+import sys
+project_root = "/home/park1119/rsbench-code/rsseval/rss"
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 from datasets.boia import BOIA
@@ -70,7 +76,7 @@ def validate(
     is_boia = True
 
     if dataset_name in ["shortmnist", "clipshortmnist"]:
-        extract_layer = "conv2"  # conv1, conv2, fc1, fc2
+        extract_layer = "fc2"  # conv1, conv2, fc1, fc2
         is_boia = False
     if dataset_name in ["boia", "clipboia"]:
         extract_layer = "fc1"  # fc1, fc2, fc3, fc4
@@ -153,26 +159,96 @@ def get_dataset(datasetname, args):
 
 
 def setup():
+    # WARNING: BATCH SIZE MUST BE 1 FOR TCAV EVALUATION
+    # Set validate=0 because validating?
+
+    # CHANGE HERE
+
+    # args = Namespace(
+    #     backbone="neural", #
+    #     preprocess=0,
+    #     finetuning=0,
+    #     batch_size=128,
+    #     n_epochs=40,
+    #     validate=0, # validate=0 means evaluate on test, not validation (train.py)
+    #     dataset="shortmnist",
+    #     lr=0.001,
+    #     exp_decay=0.99,
+    #     warmup_steps=0, # this is default even when it was first trained
+    #     wandb=None,
+    #     task="addition",
+    #     model="mnistnn",
+    #     c_sup=0,
+    #     which_c=[-1],
+    #     joint=False # True only for CLIP
+    # )
+
+    # args = Namespace(
+    #     backbone="neural",  #
+    #     preprocess=0,
+    #     finetuning=0,
+    #     batch_size=1,
+    #     n_epochs=40,
+    #     validate=0,
+    #     dataset="clipshortmnist",
+    #     lr=0.001,
+    #     exp_decay=0.99,
+    #     weight_decay=0.01,
+    #     warmup_steps=0,
+    #     wandb=None,
+    #     task="addition",
+    #     model="mnistnn", #
+    #     c_sup=0,
+    #     which_c=[-1],
+    #     joint=True,
+    # )
+
+
+    # EDIT HERE FOR DIFFERENT SETTINGS
     args = Namespace(
-        backbone="neural",  # "conceptizer",
+        backbone="neural", #
         preprocess=0,
         finetuning=0,
-        batch_size=1,
-        n_epochs=20,
-        validate=1,
-        dataset="clipsddoia",
+        batch_size=32,
+        n_epochs=40,
+        validate=0, # validate=0 means evaluate on test, not validation (train.py)
+        dataset="sddoia",
         lr=0.001,
         exp_decay=0.99,
-        warmup_steps=1,
+        weight_decay=0.0001,
+        warmup_steps=0, # this is default even when it was first trained
         wandb=None,
         task="boia",
-        boia_model="ce",
+        boia_model="ce", # ce (cross-entropy) or bce (binary cross-entropy?) keep it at ce
         model="sddoiann",
         c_sup=0,
-        which_c=-1,
-        joint=True,
-        boia_ood_knowledge=False,
+        which_c=[-1],
+        joint=False, # True only for CLIP
+        boia_ood_knowledge=False, # case for nesy models to handle ambulance
     )
+
+    # args = Namespace(
+    #     backbone="neural",  # "conceptizer",
+    #     preprocess=0,
+    #     finetuning=0,
+    #     batch_size=1,
+    #     n_epochs=20,
+    #     validate=0,
+    #     dataset="clipsddoia",
+    #     lr=0.001,
+    #     exp_decay=0.99,
+    #     warmup_steps=1,
+    #     wandb=None,
+    #     task="boia",
+    #     boia_model="ce",
+    #     model="sddoiann",
+    #     c_sup=0,
+    #     which_c=-1,
+    #     joint=True,
+    #     boia_ood_knowledge=False,
+    # )
+
+    
 
     # get dataset
     dataset = get_dataset(args.dataset, args)
@@ -232,12 +308,13 @@ def mnist_tcav_setup():
     ]
 
     tmp_concept_dict = {}
-    for dirname in os.listdir("../data/concepts"):
-        fullpath = os.path.join("../data/concepts", dirname)
+    for dirname in os.listdir("../../../data/concepts/mnist"):
+        fullpath = os.path.join("../../../data/concepts/mnist", dirname)
         if os.path.isdir(fullpath):
             tmp_concept_dict[dirname] = data_loader(fullpath, args.dataset)
 
     concept_dict = OrderedDict()
+    print(tmp_concept_dict.keys())
     for c in concepts_order:
         concept_dict[c] = tmp_concept_dict[c]
 
@@ -263,9 +340,9 @@ def kand_tcav_setup(is_clip=False):
 
     tmp_concept_dict = {}
 
-    lmao_name = "../data/kand-tcav/"
+    lmao_name = "../../../data/concepts/kand-tcav/"
     if is_clip:
-        lmao_name = "../data/kand-tcav-clip/"
+        lmao_name = "../../../data/concepts/kand-tcav-clip/"
 
     for dirname in os.listdir(lmao_name):
         fullpath = os.path.join(lmao_name, dirname)
@@ -320,8 +397,8 @@ def boia_tcav_setup():
     ]
 
     tmp_concept_dict = {}
-    for dirname in os.listdir("../data/boia-preprocess-full/concepts/"):
-        fullpath = os.path.join("../data/boia-preprocess-full/concepts/", dirname)
+    for dirname in os.listdir("../../../data/concepts/boia-preprocess-full/"):
+        fullpath = os.path.join("../../../data/concepts/boia-preprocess-full/", dirname)
         if os.path.isdir(fullpath):
             tmp_concept_dict[dirname] = data_loader(fullpath, args.dataset)
 
@@ -378,8 +455,8 @@ def sddoia_tcav_setup(full=False):
         folder_suffix = "-preprocess-full"
 
     tmp_concept_dict = {}
-    for dirname in os.listdir(f"../data/sddoia{folder_suffix}/concepts"):
-        fullpath = os.path.join(f"../data/sddoia{folder_suffix}/concepts", dirname)
+    for dirname in os.listdir(f"../../../data/concepts/sddoia{folder_suffix}"):
+        fullpath = os.path.join(f"../../../data/concepts/sddoia{folder_suffix}", dirname)
         if os.path.isdir(fullpath):
             tmp_concept_dict[dirname] = data_loader(fullpath, args.dataset)
 
@@ -407,8 +484,8 @@ def xor_tcav_setup():
     ]
 
     tmp_concept_dict = {}
-    for dirname in os.listdir("../data/xor/concepts"):
-        fullpath = os.path.join("../data/xor/concepts", dirname)
+    for dirname in os.listdir("../../../data/concepts/xor"):
+        fullpath = os.path.join("../../../data/concepts/xor", dirname)
         if os.path.isdir(fullpath):
             for i in range(4):
                 
@@ -524,8 +601,8 @@ def mnmath_tcav_setup():
         "xxxxxxx9",
     ]
     tmp_concept_dict = {}
-    for dirname in os.listdir("../data/concepts"):
-        fullpath = os.path.join("../data/concepts", dirname)
+    for dirname in os.listdir("../../../data/concepts/mnmath"):
+        fullpath = os.path.join("../../../data/concepts/mnmath", dirname)
         if os.path.isdir(fullpath):
             for i in range(8):
                 concept_name = ''
@@ -566,7 +643,9 @@ if __name__ == "__main__":
     # get everything
     args, dataset, model = setup()
 
-    seeds = [123, 456, 789, 1011, 1213]
+    # CHANGE HERE
+    seeds = [123, 456, 789, 1011, 1213, 1415, 1617, 1819, 2021, 2223]
+    #seeds = [1415, 1617, 1819, 2021, 2223]
     model_path = f"best_model_{args.dataset}_{args.model}"
     sddoia_full = ""
     to_add = ""  # "_padd_random"
@@ -577,7 +656,9 @@ if __name__ == "__main__":
 
         print("Doing seed", seed)
 
-        current_model_path = f"{model_path}_{seed}.pth"
+        # CHANGE HERE
+        current_model_path = f"../../../jobs/{args.dataset}_nn_run_nocsup/{model_path}_{seed}.pth"
+        print(f"Loading model from {current_model_path}")
 
         if not os.path.exists(current_model_path):
             print(f"{current_model_path} is missing...")
@@ -607,6 +688,14 @@ if __name__ == "__main__":
             if sddoia_full != "":
                 to_add = "_full"
             validloader, class_dict, concept_dict = sddoia_tcav_setup()
+
+        # added by daniel: reset validloader with batch_size=1 and shuffle=False
+        validloader = torch.utils.data.DataLoader(
+            validloader.dataset,
+            batch_size=1,
+            shuffle=False,  # Disable shuffling for consistent ordering
+            num_workers=4,
+        )
 
         validate(
             model,
