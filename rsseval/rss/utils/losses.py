@@ -885,3 +885,42 @@ def RAVEN_Concept_Match(out_dict: dict):
     loss /= n_attrs
 
     return loss, {"c-loss": loss.item()}
+
+
+def RAVEN_Classification(out_dict: dict, args):
+    """RAVEN classification loss.
+
+    YS is a softmaxed [B, 8] probability distribution over the 8 candidates.
+    We apply NLL loss on log(YS), clamping before log to avoid -inf.
+
+    Args:
+        out_dict: output dictionary containing "YS" [B, 8] and "LABELS" [B]
+        args: command line arguments
+
+    Returns:
+        loss: scalar loss value
+        losses: dictionary with "y-loss" entry
+    """
+    out = out_dict["YS"]  # [B, 8] softmaxed choice probabilities
+    labels = out_dict["LABELS"].to(torch.long)  # [B] ground-truth choice index (0-7)
+
+    # Clamp before log to prevent -inf (same numerical safety as normalize_concepts)
+    loss = F.nll_loss(out.clamp(min=1e-5).log(), labels, reduction="mean")
+
+    assert loss > 0, f"{loss}, {out}, {labels}"
+
+    losses = {"y-loss": loss.item()}
+    return loss, losses
+
+
+def RAVEN_Cumulative(out_dict: dict, args):
+    """RAVEN cumulative loss: task classification + optional concept supervision."""
+    loss, losses = RAVEN_Classification(out_dict, args)
+
+    mitigation = 0
+    if args.c_sup > 0:
+        loss_c, losses_c = RAVEN_Concept_Match(out_dict)
+        mitigation += args.w_c * loss_c
+        losses.update(losses_c)
+
+    return loss + args.gamma * mitigation, losses

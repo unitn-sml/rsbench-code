@@ -5,14 +5,12 @@ import numpy as np
 import torch
 import xml.etree.ElementTree as ET
 from torch.utils.data import Dataset
-from torchvision import transforms
 
 class RAVEN_Dataset(Dataset):
     """
     RAVEN Dataset for RSBench.
-    Loads RAVEN-10000 .npz files and filters them based on the 'Phase 1' curriculum:
-    Phase 1 = Samples where exactly one attribute varies according to a non-Constant rule,
-              and all other attributes are Constant.
+    Loads RAVEN-3x3x3 .npz files (3 Types x 3 Sizes x 3 Colors).
+    All concept values are already clean 0-2 per attribute — no filtering needed.
     """
     def __init__(self, base_path, config="center_single", split="train"):
         self.base_path = base_path
@@ -45,7 +43,6 @@ class RAVEN_Dataset(Dataset):
         target = torch.tensor(data['target'], dtype=torch.long)
         
         # Concepts: Extract attributes for all 16 panels (8 context + 8 choices)
-        # We need to parse XML again or trust meta_matrix? 
         # meta_matrix does NOT contain entity values (like Type=Triangle), only Rule activity.
         # So we must parse XML to get ground truth concepts for supervision.
         
@@ -57,21 +54,18 @@ class RAVEN_Dataset(Dataset):
         """
         Extract concept values for all 16 panels.
         Returns tensor of shape [16, 4] -> (Type, Size, Color, Number)
-        Values are indices.
+        Values are indices 0-2 for Type/Size/Color (3x3x3 dataset).
         """
         tree = ET.parse(xml_path)
         root = tree.getroot()
         
         panels_data = []
         all_panels = root.findall('.//Panel')
-        # We expect 16 panels (8 context + 8 choices)
-        # Note: XML might have more structure, but usually flattened order matches NPZ image stack.
         
-        # Mappings based on RAVEN/src/dataset/const.py
-        # Type: 0:none, 1:triangle, 2:square, 3:pentagon, 4:hexagon, 5:circle
-        # Size: 0..5
-        # Color: 0..9
-        # Number: 0..8 (1-9) in const.py, but usually 0-indexed in XML attribute?
+        # 3x3x3 constrained dataset:
+        # Type: 1=triangle, 2=pentagon, 3=circle (in XML) -> 0-2 after -1 shift
+        # Size: 0=small(0.4), 1=medium(0.6), 2=large(0.9)
+        # Color: 0=white(255), 1=gray(140), 2=black(0)
         
         for panel in all_panels[:16]:
             entity = panel.find('.//Entity')
@@ -81,7 +75,7 @@ class RAVEN_Dataset(Dataset):
             p_c = [0, 0, 0, 0] # Type, Size, Color, Number
             
             if entity is not None:
-                try: p_c[0] = int(entity.get('Type', 0)) - 1 # Shift 1-5 to 0-4
+                try: p_c[0] = int(entity.get('Type', 0)) - 1 # Shift 1-3 to 0-2
                 except: pass
                 try: p_c[1] = int(entity.get('Size', 0))
                 except: pass
@@ -99,48 +93,148 @@ class RAVEN_Dataset(Dataset):
 
 
 if __name__ == "__main__":
-    # Initialize dataset without filtering to check a broad range of files
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    from collections import Counter
+
+    TYPE_LABELS = ["Triangle", "Pentagon", "Circle"]
+    SIZE_LABELS = ["Small", "Medium", "Large"]
+    COLOR_LABELS = ["White", "Gray", "Black"]
+
     dataset = RAVEN_Dataset(
-        base_path="data/RAVEN-10000",
+        base_path="data/RAVEN-3x3x3",
         config="center_single",
         split="train",
     )
+    print(f"Dataset size: {len(dataset)} samples")
 
-    
-    print(f"Analyzing first 1000 files out of {len(dataset.all_files)} for attribute value ranges...")
-    
-    attr_counts = {
-        'Type': set(),
-        'Size': set(),
-        'Color': set(),
-        'Number': set()
-    }
-    
-    # Check first 1000 files to get a good sample
-    for i, f in enumerate(dataset.all_files[:1000]):
-        xml_path = f.replace('.npz', '.xml')
-        try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-            
-            for panel in root.findall('.//Panel'):
-                entity = panel.find('.//Entity')
-                layout = panel.find('.//Layout')
-                
-                if entity is not None:
-                    if 'Type' in entity.attrib: attr_counts['Type'].add(int(entity.get('Type')))
-                    if 'Size' in entity.attrib: attr_counts['Size'].add(int(entity.get('Size')))
-                    if 'Color' in entity.attrib: attr_counts['Color'].add(int(entity.get('Color')))
-                
-                if layout is not None:
-                    if 'Number' in layout.attrib: attr_counts['Number'].add(int(layout.get('Number')))
+    def extract_rules(xml_path):
+        """Parse <Rule> elements from XML and return dict {attr: rule_name}."""
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+        rules = {}
+        for rule_el in root.findall('.//Rule'):
+            attr = rule_el.get('attr', '')
+            name = rule_el.get('name', '')
+            rules[attr] = name
+        return rules
 
-        except Exception as e:
-            print(f"Error parsing {xml_path}: {e}")
+    # ── Fig 1: Three sample puzzles ──────────────────────────────────
+    n_samples = 3
+    fig, axes = plt.subplots(n_samples, 5, figsize=(16, 3.5 * n_samples + 1),
+                             gridspec_kw={"width_ratios": [3, 0.15, 2, 0.15, 2]})
+    fig.suptitle("RAVEN-3×3×3  —  Sample Puzzles", fontsize=15, fontweight="bold", y=0.98)
 
-    print("\nValue Ranges Found in XML:")
-    for attr, values in attr_counts.items():
-        sorted_vals = sorted(list(values))
-        min_val = min(sorted_vals) if sorted_vals else 'N/A'
-        max_val = max(sorted_vals) if sorted_vals else 'N/A'
-        print(f"{attr}: {sorted_vals} (Min: {min_val}, Max: {max_val})")
+    for row in range(n_samples):
+        images, target, concepts = dataset[row]
+        imgs = images[:, 0].numpy()          # [16, 160, 160]
+        target_idx = target.item()
+        c = concepts.numpy()                 # [16, 4]
+
+        # Extract rules from XML
+        xml_path = dataset.files[row].replace('.npz', '.xml')
+        rules = extract_rules(xml_path)
+
+        # --- Left: 3×3 context matrix (panel 9 = "?") ---
+        grid = np.ones((160 * 3 + 4, 160 * 3 + 4)) * 0.85
+        for i in range(9):
+            r, col = divmod(i, 3)
+            y0 = r * (160 + 2)
+            x0 = col * (160 + 2)
+            if i < 8:
+                grid[y0:y0 + 160, x0:x0 + 160] = imgs[i]
+            else:
+                patch = np.ones((160, 160)) * 0.6
+                # draw a "?"
+                grid[y0:y0 + 160, x0:x0 + 160] = patch
+        ax = axes[row, 0]
+        ax.imshow(grid, cmap="gray", vmin=0, vmax=1)
+        # Build rule annotation string
+        rule_parts = []
+        for attr in ["Type", "Size", "Color"]:
+            rname = rules.get(attr, "?")
+            rule_parts.append(f"{attr}: {rname}")
+        rule_str = "  |  ".join(rule_parts)
+        ax.set_title(f"Sample {row}\n{rule_str}", fontsize=10, fontweight="bold")
+        ax.axis("off")
+
+        # spacer
+        axes[row, 1].axis("off")
+        axes[row, 3].axis("off")
+
+        # --- Middle: answer choices 0-3 ---
+        ans_grid = np.ones((160 * 2 + 2, 160 * 2 + 2)) * 0.85
+        for j in range(4):
+            r, col = divmod(j, 2)
+            y0 = r * (160 + 2)
+            x0 = col * (160 + 2)
+            ans_grid[y0:y0 + 160, x0:x0 + 160] = imgs[8 + j]
+        ax = axes[row, 2]
+        ax.imshow(ans_grid, cmap="gray", vmin=0, vmax=1)
+        # highlight correct answer with a green rectangle
+        if target_idx < 4:
+            r, col = divmod(target_idx, 2)
+            rect = plt.Rectangle((col * 162 - 1, r * 162 - 1), 162, 162,
+                                 linewidth=3, edgecolor="limegreen", facecolor="none")
+            ax.add_patch(rect)
+        ax.set_title("Choices 0-3", fontsize=10)
+        ax.axis("off")
+
+        # --- Right: answer choices 4-7 ---
+        ans_grid2 = np.ones((160 * 2 + 2, 160 * 2 + 2)) * 0.85
+        for j in range(4):
+            r, col = divmod(j, 2)
+            y0 = r * (160 + 2)
+            x0 = col * (160 + 2)
+            ans_grid2[y0:y0 + 160, x0:x0 + 160] = imgs[12 + j]
+        ax = axes[row, 4]
+        ax.imshow(ans_grid2, cmap="gray", vmin=0, vmax=1)
+        if target_idx >= 4:
+            r, col = divmod(target_idx - 4, 2)
+            rect = plt.Rectangle((col * 162 - 1, r * 162 - 1), 162, 162,
+                                 linewidth=3, edgecolor="limegreen", facecolor="none")
+            ax.add_patch(rect)
+        ax.set_title("Choices 4-7", fontsize=10)
+        ax.axis("off")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig("raven_3x3x3_samples.png", dpi=150, bbox_inches="tight")
+    print("Saved raven_3x3x3_samples.png")
+    plt.show()
+
+    # ── Fig 2: Attribute distributions ───────────────────────────────
+    n_check = min(500, len(dataset))
+    type_counts = Counter()
+    size_counts = Counter()
+    color_counts = Counter()
+
+    for idx in range(n_check):
+        _, _, concepts = dataset[idx]
+        # Use context panels 0-7 + correct candidate (panel 8+target)
+        type_counts.update(concepts[:8, 0].tolist())
+        size_counts.update(concepts[:8, 1].tolist())
+        color_counts.update(concepts[:8, 2].tolist())
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    fig.suptitle(f"Attribute Distributions  (first {n_check} samples, context panels)",
+                 fontsize=13, fontweight="bold")
+
+    bar_colors = ["#4C72B0", "#55A868", "#C44E52"]
+
+    for ax, counts, labels, name in [
+        (axes[0], type_counts, TYPE_LABELS, "Type"),
+        (axes[1], size_counts, SIZE_LABELS, "Size"),
+        (axes[2], color_counts, COLOR_LABELS, "Color"),
+    ]:
+        vals = [counts.get(i, 0) for i in range(3)]
+        bars = ax.bar(labels, vals, color=bar_colors, edgecolor="black", linewidth=0.5)
+        ax.set_title(name, fontsize=12, fontweight="bold")
+        ax.set_ylabel("Count")
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(vals) * 0.01,
+                    str(v), ha="center", va="bottom", fontsize=9)
+
+    plt.tight_layout()
+    plt.savefig("raven_3x3x3_distributions_test.png", dpi=150, bbox_inches="tight")
+    print("Saved raven_3x3x3_distributions_test.png")
+    plt.show()

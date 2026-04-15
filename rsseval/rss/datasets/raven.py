@@ -17,19 +17,19 @@ class RAVEN(BaseDataset):
         config = getattr(self.args, 'raven_config', "center_single")
 
         self.dataset_train = RAVEN_Dataset(
-            base_path="data/RAVEN-10000",
+            base_path="data/RAVEN-3x3x3",
             config=config,
             split="train",
         )
         
         self.dataset_val = RAVEN_Dataset(
-            base_path="data/RAVEN-10000",
+            base_path="data/RAVEN-3x3x3",
             config=config,
             split="val",
         )
         
         self.dataset_test = RAVEN_Dataset(
-            base_path="data/RAVEN-10000",
+            base_path="data/RAVEN-3x3x3",
             config=config,
             split="test",
         )
@@ -56,13 +56,12 @@ class RAVEN(BaseDataset):
         return 16, ()
 
     def get_concept_labels(self):
-        # Return labels for visualization/confusion matrices
-        # We have 4 concepts: Type, Size, Color, Number
+        # 3x3x3 constrained dataset: 3 Types, 3 Sizes, 3 Colors
         return ["Type", "Size", "Color", "Number"], [
-            ["Triangle", "Square", "Pentagon", "Hexagon", "Circle"], # Type (0-4)
-            ["0", "1", "2", "3", "4", "5"], # Size (0-5)
-            [str(i) for i in range(10)], # Color (0-9)
-            [str(i) for i in range(9)] # Number (0-8)
+            ["Triangle", "Pentagon", "Circle"],  # Type (0-2)
+            ["Small", "Medium", "Large"],          # Size (0-2)
+            ["White", "Gray", "Black"],             # Color (0-2)
+            [str(i) for i in range(9)]              # Number (0-8)
         ]
 
     def get_labels(self):
