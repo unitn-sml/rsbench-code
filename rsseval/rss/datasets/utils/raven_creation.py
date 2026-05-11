@@ -10,12 +10,21 @@ class RAVEN_Dataset(Dataset):
     """
     RAVEN Dataset for RSBench.
     Loads RAVEN-3x3x3 .npz files (3 Types x 3 Sizes x 3 Colors).
-    All concept values are already clean 0-2 per attribute — no filtering needed.
+
+    Supports partial concept supervision on the training split through:
+    - c_sup: fraction of training samples with concept supervision
+    - which_c: attribute indices to supervise (0=Type, 1=Size, 2=Color)
+
+    Unsupervised concept targets are masked with -1, analogously to the
+    other rsbench datasets.
     """
-    def __init__(self, base_path, config="center_single", split="train"):
+    def __init__(self, base_path, config="center_single", split="train", c_sup=1, which_c=[-1]):
         self.base_path = base_path
         self.config = config
         self.split = split
+        self.c_sup = c_sup
+        self.which_c = which_c
+        self.is_train = split == "train"
         
         # Search pattern for files
         pattern = os.path.join(self.base_path, self.config, f"RAVEN_*_{self.split}.npz")
@@ -26,6 +35,10 @@ class RAVEN_Dataset(Dataset):
             self.files = []
         else:
             self.files = self.all_files
+
+        # Deterministic supervision mask, analogous to other rsbench datasets.
+        rng = np.random.RandomState(0)
+        self.r_seq = rng.rand(len(self.files)) if len(self.files) > 0 else np.array([])
 
     def __len__(self):
         return len(self.files)
@@ -47,8 +60,32 @@ class RAVEN_Dataset(Dataset):
         # So we must parse XML to get ground truth concepts for supervision.
         
         concepts = self._extract_concepts_from_xml(file_path.replace('.npz', '.xml'))
-        
+
+        if self.is_train:
+            concepts = self._apply_concept_supervision_mask(concepts, idx)
+
         return images, target, concepts
+
+    def _apply_concept_supervision_mask(self, concepts, idx):
+        """Mask concepts with -1 according to c_sup / which_c.
+
+        We only supervise the first 3 modeled attributes (Type, Size, Color)
+        on the 8 context panels, mirroring RAVEN_Concept_Match.
+        """
+        concepts = concepts.clone()
+
+        # Sample-level supervision fraction.
+        if self.r_seq[idx] > self.c_sup:
+            concepts[:8, :3] = -1
+            return concepts
+
+        # Attribute-level supervision subset.
+        if not (len(self.which_c) == 1 and self.which_c[0] == -1):
+            for attr_idx in range(3):
+                if attr_idx not in self.which_c:
+                    concepts[:8, attr_idx] = -1
+
+        return concepts
 
     def _extract_concepts_from_xml(self, xml_path):
         """

@@ -20,6 +20,8 @@ class RAVEN(BaseDataset):
             base_path="data/RAVEN-3x3x3",
             config=config,
             split="train",
+            c_sup=self.args.c_sup,
+            which_c=self.args.which_c,
         )
         
         self.dataset_val = RAVEN_Dataset(
@@ -36,9 +38,6 @@ class RAVEN(BaseDataset):
 
         print(f"Loaded datasets in {time.time()-start:.2f} s.")
         self.print_stats()
-
-        # Create DataLoaders
-        # Note: BaseDataset usually expects get_data_loaders to return loaders, not just set datasets
         
         train_loader = DataLoader(self.dataset_train, batch_size=self.args.batch_size, shuffle=True, num_workers=4)
         val_loader = DataLoader(self.dataset_val, batch_size=self.args.batch_size, shuffle=False, num_workers=4)
