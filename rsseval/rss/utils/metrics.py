@@ -193,7 +193,10 @@ def evaluate_metrics(
             "mnmath",
         ]:
             loss, ac, acc, f1 = MNMATH_eval_tloss_cacc_acc(out_dict, concepts)
+        elif args.dataset == "raven":
+            loss, ac, acc, f1 = RAVEN_eval_tloss_cacc_acc(out_dict, concepts)
         else:
+            print(f"Metrics not implemented for dataset: {args.dataset}")
             NotImplementedError()
 
         if not last:
@@ -228,6 +231,26 @@ def evaluate_metrics(
             cs = np.split(c_pred, c_pred.shape[1], axis=1)
             p_cs = np.split(pc_pred, pc_pred.shape[1], axis=1)
             p_ys = y_pred
+        elif args.dataset == "raven":
+            # YS: [Batch, 8] -> [Batch] (candidate index)
+            y_true = y_true.astype(int).reshape(-1)
+            ys = np.argmax(y_pred, axis=1).astype(int).reshape(-1)
+
+            p_cs_all = pc_pred
+
+            # Current RavenDPL uses Type(3), Size(3), Color(3)
+            ptype = pc_pred[..., 0:3].argmax(axis=-1)
+            psize = pc_pred[..., 3:6].argmax(axis=-1)
+            pcolor = pc_pred[..., 6:9].argmax(axis=-1)
+
+            ctype_max = pc_pred[..., 0:3].max(axis=-1)
+            csize_max = pc_pred[..., 3:6].max(axis=-1)
+            ccolor_max = pc_pred[..., 6:9].max(axis=-1)
+
+            cs = np.stack([ptype, psize, pcolor], axis=-1)
+            p_cs = np.stack([ctype_max, csize_max, ccolor_max], axis=-1)
+            gs = c_true[..., :3]
+            p_ys = y_pred.max(axis=1)
         else:
             ys = np.argmax(y_pred, axis=1)
 
@@ -236,7 +259,12 @@ def evaluate_metrics(
             p_cs = np.split(pc_pred, pc_pred.shape[1], axis=1)
             p_ys = y_pred
 
-        p_cs_all = p_cs
+        # For RAVEN, p_cs_all must remain the full concept-probability tensor
+        # [N, 16, 9] = [Type(3) | Size(3) | Color(3)] per panel.
+        # Do not overwrite it with p_cs, which only stores max confidences
+        # [N, 16, 3]. Other datasets keep the historical behavior.
+        if args.dataset != "raven":
+            p_cs_all = p_cs
         p_ys_all = y_pred
 
         assert len(gs) == len(cs), f"gs: {gs.shape}, cs: {cs.shape}"
@@ -247,6 +275,7 @@ def evaluate_metrics(
             "presddoia",
             "clipboia",
             "clipsddoia",
+            "raven",
         ]:
             gs = np.concatenate(gs, axis=0).squeeze(1)
         if args.dataset in [
@@ -257,6 +286,8 @@ def evaluate_metrics(
             "clipsddoia",
         ]:
             cs = (cs >= 0.5).astype(np.int)
+        elif args.dataset == "raven":
+            pass
         elif args.dataset not in [
             "kandinsky",
             "prekandinsky",
@@ -288,6 +319,7 @@ def evaluate_metrics(
             "presddoia",
             "clipboia",
             "clipsddoia",
+            "raven",
         ]:
             p_cs_all = np.concatenate(p_cs_all, axis=0).squeeze(
                 1
@@ -321,6 +353,7 @@ def evaluate_metrics(
             "restrictedmnist",
             "clipsddoia",
             "clipshortmnist",
+            "raven",
         ]:
             if cf1:
                 return tloss / L, cacc / L, yacc / L, f1sc / L, fcf1 / L
@@ -1299,3 +1332,33 @@ def world_accuracy(world_prob: ndarray, world_true: ndarray, n_concepts: int):
     ).astype(int)
 
     return get_accuracy_and_counter(n_world, world_pred, world_true, True)
+
+
+def RAVEN_eval_tloss_cacc_acc(out_dict, concepts):
+    """RAVEN evaluation for the current 3x3x3 factorized setup."""
+    pCs = out_dict["pCS"]  # [B, 16, 9]
+
+    # Type(0:3), Size(3:6), Color(6:9)
+    ptype = pCs[..., 0:3]
+    psize = pCs[..., 3:6]
+    pcolor = pCs[..., 6:9]
+
+    g_type = concepts[..., 0]
+    g_size = concepts[..., 1]
+    g_color = concepts[..., 2]
+
+    acc_type = (ptype.argmax(dim=-1) == g_type).float().mean()
+    acc_size = (psize.argmax(dim=-1) == g_size).float().mean()
+    acc_color = (pcolor.argmax(dim=-1) == g_color).float().mean()
+    cacc = (acc_type + acc_size + acc_color) / 3.0 * 100.0
+
+    ys = out_dict["YS"]
+    labels = out_dict["LABELS"]
+    preds = ys.argmax(dim=-1)
+    acc = (preds == labels).float().mean().item() * 100.0
+    f1 = f1_score(labels.cpu().numpy(), preds.cpu().numpy(), average="macro") * 100.0
+
+    # Real evaluation loss for the answer prediction.
+    # ys is already log-probabilities (log_softmax), so NLL applies directly.
+    loss = F.nll_loss(ys, labels.to(torch.long), reduction="mean")
+    return loss, cacc, acc, f1
