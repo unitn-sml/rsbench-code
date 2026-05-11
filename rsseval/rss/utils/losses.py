@@ -849,6 +849,9 @@ def RAVEN_Concept_Match(out_dict: dict):
     so the model learns to score them through symbolic reasoning, not direct
     concept supervision.
 
+    Targets with value -1 are ignored, analogously to Kandinsky and the other
+    rsbench datasets supporting partial concept supervision.
+
     Attribute layout in z: Type(3) | Size(3) | Color(3) = 9 total
 
     Args:
@@ -857,55 +860,93 @@ def RAVEN_Concept_Match(out_dict: dict):
             "CONCEPTS" [B, 16, n_attrs]: ground-truth concept indices
 
     Returns:
-        loss: scalar loss value (averaged over attributes)
+        loss: scalar loss value (averaged over supervised attributes)
         losses: dictionary with "c-loss" entry
     """
-    # Only supervise context panels (0-7), not the 8 candidate choices
     z = out_dict["CS"][:, :8]            # [B, 8, n_facts]
     targets = out_dict["CONCEPTS"][:, :8].to(torch.long)  # [B, 8, n_attrs]
 
-    loss_f = torch.nn.CrossEntropyLoss()
+    loss = torch.tensor(0.0, device=z.device)
+    n_supervised_attrs = 0
 
-    # Type: logits [0:3], target column 0
-    z_type = z[..., 0:3]
-    l_type = loss_f(z_type.reshape(-1, 3), targets[..., 0].reshape(-1))
+    for attr_idx, (lo, hi) in enumerate([(0, 3), (3, 6), (6, 9)]):
+        target = targets[..., attr_idx].reshape(-1)
+        mask = target != -1
+        if mask.sum() > 0:
+            logits = z[..., lo:hi].reshape(-1, 3)
+            loss += torch.nn.CrossEntropyLoss()(logits[mask], target[mask])
+            n_supervised_attrs += 1
 
-    # Size: logits [3:6], target column 1
-    z_size = z[..., 3:6]
-    l_size = loss_f(z_size.reshape(-1, 3), targets[..., 1].reshape(-1))
-
-    # Color: logits [6:9], target column 2
-    z_color = z[..., 6:9]
-    l_color = loss_f(z_color.reshape(-1, 3), targets[..., 2].reshape(-1))
-
-    n_attrs = 3
-    loss = l_type + l_size + l_color
-
-    # Average over attributes
-    loss /= n_attrs
+    if n_supervised_attrs > 0:
+        loss /= n_supervised_attrs
 
     return loss, {"c-loss": loss.item()}
+
+
+def RAVEN_Entropy(out_dict, args):
+    """RAVEN entropy loss.
+
+    Follows the MiniKandinsky/Kandinsky structure, but applies it to the
+    8 context panels only. Each context panel contributes 3 concept slots
+    (Type, Size, Color), each of size 3.
+
+    Args:
+        out_dict: output dictionary containing "pCS" [B, 16, 9]
+        args: command line arguments
+
+    Returns:
+        loss: entropy penalty value
+        losses: dictionary with "H-loss" entry
+    """
+    # Only regularize the context panels, mirroring concept supervision.
+    pCs = out_dict["pCS"][:, :8]  # [B, 8, 9]
+    # pCs = out_dict["pCS"]
+
+    # Split [Type(3), Size(3), Color(3)] and flatten panel/attribute slots.
+    pc_i = torch.cat(torch.split(pCs, 3, dim=-1), dim=1)  # [B, 24, 3]
+
+    # Mean predicted concept distribution across the batch for each slot.
+    p_mean = torch.mean(pc_i, dim=0)  # [24, 3]
+
+    p_mean += 1e-5
+    # renormalization per slot distribution
+    with torch.no_grad():
+        Z = torch.sum(p_mean, dim=1, keepdim=True)
+    p_mean /= Z
+
+    loss = 0
+    for i in range(p_mean.size(0)):
+        # loss -= torch.sum(p_mean[i] * p_mean[i].log()) / np.log(10) / p_mean.size(0)
+        loss -= torch.sum(p_mean[i] * p_mean[i].log()) / np.log(p_mean.size(1)) / p_mean.size(0)
+
+    losses = {"H-loss": 1 - loss}
+
+    assert (1 - loss) > 0, loss
+
+    return 1 - loss, losses
 
 
 def RAVEN_Classification(out_dict: dict, args):
     """RAVEN classification loss.
 
-    YS is a softmaxed [B, 8] probability distribution over the 8 candidates.
-    We apply NLL loss on log(YS), clamping before log to avoid -inf.
+    YS is a log-softmaxed [B, 8] log-probability distribution over the 8
+    candidates (returned by score_choices in log-space). We apply NLL loss
+    directly on the log-probabilities, matching how KandDPL handles its output.
 
     Args:
-        out_dict: output dictionary containing "YS" [B, 8] and "LABELS" [B]
+        out_dict: output dictionary containing "YS" [B, 8] log-probs and "LABELS" [B]
         args: command line arguments
 
     Returns:
         loss: scalar loss value
         losses: dictionary with "y-loss" entry
     """
-    out = out_dict["YS"]  # [B, 8] softmaxed choice probabilities
+    out = out_dict["YS"]  # [B, 8] log-softmax choice log-probabilities
     labels = out_dict["LABELS"].to(torch.long)  # [B] ground-truth choice index (0-7)
 
-    # Clamp before log to prevent -inf (same numerical safety as normalize_concepts)
-    loss = F.nll_loss(out.clamp(min=1e-5).log(), labels, reduction="mean")
+    # YS is already log-probabilities, so NLL loss applies directly.
+    # No need for .log() (which would be log-log) or .clamp().
+    loss = F.nll_loss(out, labels, reduction="mean")
 
     assert loss > 0, f"{loss}, {out}, {labels}"
 
@@ -914,10 +955,14 @@ def RAVEN_Classification(out_dict: dict, args):
 
 
 def RAVEN_Cumulative(out_dict: dict, args):
-    """RAVEN cumulative loss: task classification + optional concept supervision."""
+    """RAVEN cumulative loss: task classification + optional entropy + optional concept supervision."""
     loss, losses = RAVEN_Classification(out_dict, args)
 
     mitigation = 0
+    if args.entropy:
+        loss_h, losses_h = RAVEN_Entropy(out_dict, args)
+        mitigation += args.w_h * loss_h
+        losses.update(losses_h)
     if args.c_sup > 0:
         loss_c, losses_c = RAVEN_Concept_Match(out_dict)
         mitigation += args.w_c * loss_c
