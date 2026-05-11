@@ -4,6 +4,10 @@ import os
 from utils.conf import create_path
 
 
+def _get_output_dir(args):
+    return getattr(args, "output_dir", ".") or "."
+
+
 def _get_tag(args):
     """Get tag for the model name
 
@@ -31,12 +35,13 @@ def create_load_ckpt(model, args):
     Returns:
         model (nn.Module): model
     """
-    create_path("data/runs")
-    create_path("data/ckpts")
+    output_dir = _get_output_dir(args)
+    create_path(os.path.join(output_dir, "data/runs"))
+    create_path(os.path.join(output_dir, "data/ckpts"))
 
     tag = _get_tag(args)
 
-    PATH = f"data/runs/{args.dataset}-{args.model}-{tag}-start.pt"
+    PATH = os.path.join(output_dir, f"data/runs/{args.dataset}-{args.model}-{tag}-start.pt")
 
     if args.checkin is not None:
         model.load_state_dict(torch.load(args.checkin))
@@ -60,10 +65,11 @@ def save_model(model, args):
     Returns:
         None: This function does not return a value.
     """
-    create_path("data/ckpts")
+    output_dir = _get_output_dir(args)
+    create_path(os.path.join(output_dir, "data/ckpts"))
     tag = _get_tag(args)
 
-    PATH = f"data/ckpts/{args.dataset}-{args.model}-{tag}-{args.seed}-end.pt"
+    PATH = os.path.join(output_dir, f"data/ckpts/{args.dataset}-{args.model}-{tag}-{args.seed}-end.pt")
 
     if args.checkout:
         print("Saved", PATH, "\n")
@@ -93,13 +99,14 @@ def load_checkpoint(model, args, checkin=None):
     Returns:
         model (nn.Module): model
     """
-    create_path("data/ckpts")
+    output_dir = _get_output_dir(args)
+    create_path(os.path.join(output_dir, "data/ckpts"))
     tag = _get_tag(args)
 
     if checkin is not None:
         PATH = checkin
     else:
-        PATH = f"data/ckpts/{args.dataset}-{args.model}-{tag}-{args.seed}-end.pt"
+        PATH = os.path.join(output_dir, f"data/ckpts/{args.dataset}-{args.model}-{tag}-{args.seed}-end.pt")
 
     if not os.path.exists(PATH):
         raise ValueError(f"You have to train the model first, missing {PATH}")

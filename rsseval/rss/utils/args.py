@@ -37,9 +37,16 @@ def add_experiment_args(parser: ArgumentParser) -> None:
             "mini_patterns",
             "boia",
             "xor",
-            "mnmath"
+            "mnmath",
+            "raven",
         ],
         help="Which operation to choose.",
+    )
+    parser.add_argument(
+        "--raven_config",
+        type=str,
+        default="center_single",
+        help="RAVEN configuration (e.g. center_single)",
     )
     # model settings
     parser.add_argument(
@@ -128,6 +135,18 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         "--n_epochs", type=int, default=50, help="Number of epochs per task."
     )
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
+    parser.add_argument(
+        "--early_stop_patience",
+        type=int,
+        default=-1,
+        help="Stop if val loss does not improve for this many epochs (-1 disables).",
+    )
+    parser.add_argument(
+        "--early_stop_min_delta",
+        type=float,
+        default=0.0,
+        help="Minimum val-loss decrease to count as an improvement.",
+    )
 
     # deep ensembles
     parser.add_argument(
@@ -204,7 +223,7 @@ def add_management_args(parser: ArgumentParser) -> None:
         "--wandb",
         type=str,
         default=None,
-        help="Enable wandb logging -- set name of project",
+        help="Enable wandb logging -- set the wandb entity/user (project is set via --project)",
     )
     # checkpoints
     parser.add_argument(
@@ -212,6 +231,12 @@ def add_management_args(parser: ArgumentParser) -> None:
         type=str,
         default=None,
         help="location and path FROM where to load ckpt.",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=".",
+        help="Directory where training artifacts (best model, plots, CSVs) are saved.",
     )
     parser.add_argument(
         "--checkout",
