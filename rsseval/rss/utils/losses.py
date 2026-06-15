@@ -866,14 +866,15 @@ def RAVEN_Concept_Match(out_dict: dict):
     z = out_dict["CS"][:, :8]            # [B, 8, n_facts]
     targets = out_dict["CONCEPTS"][:, :8].to(torch.long)  # [B, 8, n_attrs]
 
+    n = z.shape[-1] // 3  # values per attribute
     loss = torch.tensor(0.0, device=z.device)
     n_supervised_attrs = 0
 
-    for attr_idx, (lo, hi) in enumerate([(0, 3), (3, 6), (6, 9)]):
+    for attr_idx, (lo, hi) in enumerate([(0, n), (n, 2 * n), (2 * n, 3 * n)]):
         target = targets[..., attr_idx].reshape(-1)
         mask = target != -1
         if mask.sum() > 0:
-            logits = z[..., lo:hi].reshape(-1, 3)
+            logits = z[..., lo:hi].reshape(-1, n)
             loss += torch.nn.CrossEntropyLoss()(logits[mask], target[mask])
             n_supervised_attrs += 1
 
@@ -899,11 +900,11 @@ def RAVEN_Entropy(out_dict, args):
         losses: dictionary with "H-loss" entry
     """
     # Only regularize the context panels, mirroring concept supervision.
-    pCs = out_dict["pCS"][:, :8]  # [B, 8, 9]
-    # pCs = out_dict["pCS"]
+    pCs = out_dict["pCS"][:, :8]  # [B, 8, n_facts]
+    n = pCs.shape[-1] // 3  # values per attribute
 
-    # Split [Type(3), Size(3), Color(3)] and flatten panel/attribute slots.
-    pc_i = torch.cat(torch.split(pCs, 3, dim=-1), dim=1)  # [B, 24, 3]
+    # Split [Type(n), Size(n), Color(n)] and flatten panel/attribute slots.
+    pc_i = torch.cat(torch.split(pCs, n, dim=-1), dim=1)  # [B, 24, n]
 
     # Mean predicted concept distribution across the batch for each slot.
     p_mean = torch.mean(pc_i, dim=0)  # [24, 3]
@@ -960,8 +961,18 @@ def RAVEN_Cumulative(out_dict: dict, args):
 
     mitigation = 0
     if args.entropy:
+        # Entropy annealing: if entropy_anneal_epochs > 0, linearly decay w_h
+        # from its full value down to 0.1 over the specified number of epochs,
+        # then hold at 0.1. This gives the task signal room to compete once
+        # concepts are bootstrapped.
+        w_h = args.w_h
+        anneal = getattr(args, 'entropy_anneal_epochs', 0)
+        if anneal > 0:
+            epoch = getattr(args, '_current_epoch', 0)
+            frac = max(0.0, 1.0 - epoch / anneal)
+            w_h = args.w_h * frac + 0.1 * (1.0 - frac)
         loss_h, losses_h = RAVEN_Entropy(out_dict, args)
-        mitigation += args.w_h * loss_h
+        mitigation += w_h * loss_h
         losses.update(losses_h)
     if args.c_sup > 0:
         loss_c, losses_c = RAVEN_Concept_Match(out_dict)
