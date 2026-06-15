@@ -1025,50 +1025,60 @@ def create_mnist_and(sequence_len=0, n_digits=0, task="mnmath"):
         NotImplementedError("Wrong choice")
 
 
-def build_worlds_queries_matrix_RAVEN(n_vals, rules=["Constant"]):
+def build_worlds_queries_matrix_RAVEN(n_vals, rules=["Constant"], arithmetic_offset=0):
     """
     Build logic matrices for factorized RAVEN attribute experts.
 
     Args:
         n_vals: number of possible values for the attribute.
-                For RAVEN-3x3x3 this is 3 for Type/Size/Color.
-        rules: list of rule names to compile. Supported rules are
-               "Constant", "Progression", "Arithmetic", and
-               "Distribute_Three".
+        rules: list of rule names to compile.
+               "Distribute_Three" is expanded into C(n_vals, 3) subset-specific
+               columns so that the AND-rule (r1==r2==r3) enforces that
+               all three rows use the *same* three values.
+        arithmetic_offset: bias added to the Arithmetic formula.
+               Generator uses 0 for Color, +1 for Size (v1+v2+1==v3).
 
     Returns:
-        w_q: tensor of shape [n_vals^3, n_rules], where each row corresponds
-             to one world (v1, v2, v3) and each column to a rule.
-        and_rule: tensor of shape [n_rules^3, 2] encoding explicit agreement
-             over three row-level rule variables `(r1, r2, r3)`.
-             Column 1 = valid iff `r1 == r2 == r3`, column 0 = invalid otherwise.
+        w_q: tensor of shape [n_vals^3, n_rules] (with expanded columns)
+        and_rule: tensor of shape [n_rules^3, 2] encoding r1==r2==r3
     """
-    possible_worlds = list(product(range(n_vals), repeat=3))
-    n_worlds = len(possible_worlds)
-    n_rules = len(rules)
+    from itertools import combinations, product as _product
 
-    and_rule = torch.zeros(n_rules**3, 2)
-    possible_rule_triples = list(product(range(n_rules), repeat=3))
-    for idx, (r1, r2, r3) in enumerate(possible_rule_triples):
+    possible_worlds = list(_product(range(n_vals), repeat=3))
+    n_worlds = len(possible_worlds)
+
+    # Expand "Distribute_Three" into subset-specific columns.
+    expanded = []
+    for rule in rules:
+        if rule == "Distribute_Three" and n_vals >= 3:
+            for s in combinations(range(n_vals), 3):
+                expanded.append(("Distribute_Three", s))
+        elif rule == "Arithmetic_Add":
+            expanded.append(("Arithmetic_Add", arithmetic_offset))
+        elif rule == "Arithmetic_Sub":
+            expanded.append(("Arithmetic_Sub", arithmetic_offset))
+        else:
+            expanded.append((rule, None))
+    n_rules = len(expanded)
+
+    and_rule = torch.zeros(n_rules ** 3, 2)
+    for idx, (r1, r2, r3) in enumerate(_product(range(n_rules), repeat=3)):
         if r1 == r2 and r2 == r3:
             and_rule[idx, 1] = 1.0
         else:
             and_rule[idx, 0] = 1.0
 
     w_q = torch.zeros(n_worlds, n_rules)
-    look_up = {i: c for i, c in zip(range(n_worlds), possible_worlds)}
 
     for w in range(n_worlds):
-        v1, v2, v3 = look_up[w]
+        v1, v2, v3 = possible_worlds[w]
 
-        for rule_idx, rule in enumerate(rules):
+        for rule_idx, (rule, subset) in enumerate(expanded):
             if rule == "Constant":
                 if v1 == v2 and v2 == v3:
                     w_q[w, rule_idx] = 1.0
 
             elif rule == "Progression":
-                # Generic ordered-domain progression. For {0,1,2}, this reduces
-                # naturally to the only valid sequences: (0,1,2) and (2,1,0).
                 if (v2 - v1) == 1 and (v3 - v2) == 1:
                     w_q[w, rule_idx] = 1.0
                 elif (v2 - v1) == -1 and (v3 - v2) == -1:
@@ -1078,21 +1088,22 @@ def build_worlds_queries_matrix_RAVEN(n_vals, rules=["Constant"]):
                 elif (v2 - v1) == -2 and (v3 - v2) == -2:
                     w_q[w, rule_idx] = 1.0
 
-            elif rule == "Arithmetic":
-                # A+B=C or A-B=C
-                if v1 + v2 == v3:
-                    w_q[w, rule_idx] = 1.0
-                elif v1 - v2 == v3:
-                    w_q[w, rule_idx] = 1.0
+            elif rule in ("Arithmetic", "Arithmetic_Add", "Arithmetic_Sub"):
+                # Split into separate columns so the AND-rule (r1==r2==r3)
+                # enforces the same operation across all three rows.
+                # Generator formulas differ per attribute:
+                #   Color: v1+v2 == v3   |   v1-v2 == v3     (offset=0)
+                #   Size:  v1+v2+1 == v3 |   v1-v2-1 == v3   (offset=1)
+                o = arithmetic_offset
+                if rule in ("Arithmetic", "Arithmetic_Add"):
+                    if v1 + v2 + o == v3:
+                        w_q[w, rule_idx] = 1.0
+                if rule in ("Arithmetic", "Arithmetic_Sub"):
+                    if v1 - v2 - o == v3:
+                        w_q[w, rule_idx] = 1.0
 
             elif rule == "Distribute_Three":
-                # Sample 3 values and permute them across rows.
-                # In the 3x3x3 setting, each attribute has exactly 3 possible
-                # values, so this is equivalent to "all distinct".
-                if v1 != v2 and v1 != v3 and v2 != v3:
+                if set([v1, v2, v3]) == set(subset):
                     w_q[w, rule_idx] = 1.0
-
-            else:
-                raise ValueError(f"Unsupported RAVEN rule: {rule}")
 
     return w_q, and_rule
