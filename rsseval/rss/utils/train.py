@@ -375,7 +375,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         wandb.init(
             project=args.project,
             entity=args.wandb,
-            name=str(args.dataset) + "_" + str(args.model),
+            name=getattr(args, 'run_name', f"{args.dataset}_{args.model}"),
             config=args,
         )
 
@@ -391,6 +391,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         conc_sup = dataset.get_sup()
 
     for epoch in range(args.n_epochs):
+        args._current_epoch = epoch
         model.train()
 
         ys, y_true, cs, cs_true = None, None, None, None
@@ -650,15 +651,16 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
             # Joint (Type, Size, Color) concept collapse
             joint_collapse, joint_cm = raven_joint_concept_collapse(c_true_flat, c_pred_flat)
-            print(f"Joint concept collapse (27-class): {joint_collapse:.4f}")
+            n = int(round(joint_cm.shape[0] ** (1/3)))  # derive n_vals from matrix size
+            print(f"Joint concept collapse ({n**3}-class): {joint_collapse:.4f}")
             plot_raven_joint_confusion_matrix(
                 joint_cm,
                 save_path=out_path(f"joint_concepts_{args.dataset}_{args.model}_lr_{args.lr}.png"),
             )
 
-            # Pairwise joint collapse (9×9 each)
+            # Pairwise joint collapse
             pairwise = raven_pairwise_joint_collapse(c_true_flat, c_pred_flat)
-            pair_idx = {"Type×Size": (0, 1), "Type×Color": (0, 2), "Size×Color": (1, 2)}
+            pair_idx = {"TypexSize": (0, 1), "TypexColor": (0, 2), "SizexColor": (1, 2)}
             for pair_name, (clp, cm) in pairwise.items():
                 i, j = pair_idx[pair_name]
                 safe_name = pair_name.replace("×", "x")
