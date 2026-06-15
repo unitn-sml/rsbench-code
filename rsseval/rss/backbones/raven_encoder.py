@@ -35,11 +35,7 @@ class RavenMLP(nn.Module):
 
     def __init__(self, latent_dim=9):
         super(RavenMLP, self).__init__()
-        
-        # 9 dimensions: Type(3) + Size(3) + Color(3)
         self.latent_dim = latent_dim
-        
-        # Use the independent panel encoder
         self.panel_encoder = RavenPanelEncoder(latent_dim=self.latent_dim)
 
     def forward(self, x):
@@ -82,10 +78,12 @@ if __name__ == "__main__":
     LR = 1e-3
     EPOCHS = 20
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    DATA_PATH = "data/RAVEN-3x3x3"
+    N_VALUES = 3  # 3 for 3x3x3, 4 for 4x4x4
+    LATENT_DIM = N_VALUES * 3
+    DATA_PATH = f"data/RAVEN-{N_VALUES}x{N_VALUES}x{N_VALUES}"
 
     ATTR_NAMES = ["Type", "Size", "Color"]
-    ATTR_SLICES = [(0, 3), (3, 6), (6, 9)]  # logit slices in 9-dim output
+    ATTR_SLICES = [(0, N_VALUES), (N_VALUES, 2 * N_VALUES), (2 * N_VALUES, 3 * N_VALUES)]
 
     # ── Data ────────────────────────────────────────────────────────
     train_ds = RAVEN_Dataset(base_path=DATA_PATH, config="center_single", split="train")
@@ -98,7 +96,7 @@ if __name__ == "__main__":
     print(f"Device: {DEVICE}")
 
     # ── Model & Optimizer ───────────────────────────────────────────
-    model = RavenMLP(latent_dim=9).to(DEVICE)
+    model = RavenMLP(latent_dim=LATENT_DIM).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 

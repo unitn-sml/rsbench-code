@@ -67,8 +67,9 @@ class RavenDPL(DeepProblogModel):
         # Concept dimensions per attribute
         self.raven_config = args.raven_config if args else "center_single"
         if self.raven_config == "center_single":
-            self.dims = {"Type": 3, "Size": 3, "Color": 3}
-            self.n_facts = 9  # 3+3+3
+            n = getattr(args, 'n_values', 3)
+            self.dims = {"Type": n, "Size": n, "Color": n}
+            self.n_facts = n * 3
 
         self.nr_classes = nr_classes  # 8 candidate choices
         self.n_and_classes = 2  # invalid / valid for explicit row-rule agreement
@@ -85,7 +86,8 @@ class RavenDPL(DeepProblogModel):
                 self.attr_rules[attr] = [
                     "Constant",
                     "Progression",
-                    "Arithmetic",
+                    "Arithmetic_Add",
+                    "Arithmetic_Sub",
                     "Distribute_Three",
                 ]
 
@@ -94,9 +96,12 @@ class RavenDPL(DeepProblogModel):
         self.wq_matrices = {}
         self.and_rules = {}
         self.device = get_device()
+        # Generator uses offset=+1 for Size arithmetic, 0 for Color.
+        _ARITH_OFFSETS = {"Size": 1, "Color": 0, "Type": 0}
         for attr, dim in self.dims.items():
             rules = self.attr_rules[attr]
-            mat, and_rule = build_worlds_queries_matrix_RAVEN(dim, rules)
+            offset = _ARITH_OFFSETS.get(attr, 0)
+            mat, and_rule = build_worlds_queries_matrix_RAVEN(dim, rules, arithmetic_offset=offset)
             self.wq_matrices[attr] = mat.float().to(self.device)
             self.and_rules[attr] = and_rule.float().to(self.device)
             

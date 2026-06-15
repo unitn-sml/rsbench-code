@@ -5,19 +5,32 @@ from backbones.raven_encoder import RavenMLP
 import time
 from torch.utils.data import DataLoader
 
+# ── Concept labels per n_values ──────────────────────────────────────
+_TYPE_LABELS = {
+    3: ["Triangle", "Pentagon", "Circle"],
+    4: ["Triangle", "Square", "Pentagon", "Circle"],
+}
+_SIZE_LABELS = {
+    3: ["Small", "Medium", "Large"],
+    4: ["Small", "Medium-small", "Medium-large", "Large"],
+}
+_COLOR_LABELS = {
+    3: ["White", "Gray", "Black"],
+    4: ["White", "Light-gray", "Dark-gray", "Black"],
+}
+
 class RAVEN(BaseDataset):
     NAME = "raven"
 
     def get_data_loaders(self):
         start = time.time()
-        
-        # We can pass specific args for configuration if needed via self.args
-        # For now defaults to center_single
-        
+
         config = getattr(self.args, 'raven_config', "center_single")
+        n = getattr(self.args, 'n_values', 3)
+        base_path = f"data/RAVEN-{n}x{n}x{n}"
 
         self.dataset_train = RAVEN_Dataset(
-            base_path="data/RAVEN-3x3x3",
+            base_path=base_path,
             config=config,
             split="train",
             c_sup=self.args.c_sup,
@@ -25,13 +38,13 @@ class RAVEN(BaseDataset):
         )
         
         self.dataset_val = RAVEN_Dataset(
-            base_path="data/RAVEN-3x3x3",
+            base_path=base_path,
             config=config,
             split="val",
         )
         
         self.dataset_test = RAVEN_Dataset(
-            base_path="data/RAVEN-3x3x3",
+            base_path=base_path,
             config=config,
             split="test",
         )
@@ -46,21 +59,19 @@ class RAVEN(BaseDataset):
         return train_loader, val_loader, test_loader
 
     def get_backbone(self, args=None):
-        # Return the encoder compatible with 160x160 input
-        # We return (encoder, decoder). Decoder is None for now.
-        return RavenMLP(), None
+        n = getattr(self.args, 'n_values', 3) if self.args else 3
+        return RavenMLP(latent_dim=n * 3), None
 
     def get_split(self):
-        # 16 images per sample
         return 16, ()
 
     def get_concept_labels(self):
-        # 3x3x3 constrained dataset: 3 Types, 3 Sizes, 3 Colors
+        n = getattr(self.args, 'n_values', 3)
         return ["Type", "Size", "Color", "Number"], [
-            ["Triangle", "Pentagon", "Circle"],  # Type (0-2)
-            ["Small", "Medium", "Large"],          # Size (0-2)
-            ["White", "Gray", "Black"],             # Color (0-2)
-            [str(i) for i in range(9)]              # Number (0-8)
+            _TYPE_LABELS.get(n, _TYPE_LABELS[3]),
+            _SIZE_LABELS.get(n, _SIZE_LABELS[3]),
+            _COLOR_LABELS.get(n, _COLOR_LABELS[3]),
+            [str(i) for i in range(9)],
         ]
 
     def get_labels(self):

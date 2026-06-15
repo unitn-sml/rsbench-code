@@ -9,16 +9,10 @@ from torch.utils.data import Dataset
 class RAVEN_Dataset(Dataset):
     """
     RAVEN Dataset for RSBench.
-    Loads RAVEN-3x3x3 .npz files (3 Types x 3 Sizes x 3 Colors).
-
-    Supports partial concept supervision on the training split through:
-    - c_sup: fraction of training samples with concept supervision
-    - which_c: attribute indices to supervise (0=Type, 1=Size, 2=Color)
-
-    Unsupervised concept targets are masked with -1, analogously to the
-    other rsbench datasets.
+    Supports partial concept supervision.
     """
-    def __init__(self, base_path, config="center_single", split="train", c_sup=1, which_c=[-1]):
+    def __init__(self, base_path, config="center_single", split="train",
+                 c_sup=1, which_c=[-1]):
         self.base_path = base_path
         self.config = config
         self.split = split
@@ -26,7 +20,6 @@ class RAVEN_Dataset(Dataset):
         self.which_c = which_c
         self.is_train = split == "train"
         
-        # Search pattern for files
         pattern = os.path.join(self.base_path, self.config, f"RAVEN_*_{self.split}.npz")
         self.all_files = sorted(glob.glob(pattern))
         
@@ -134,12 +127,12 @@ if __name__ == "__main__":
     import matplotlib.patches as mpatches
     from collections import Counter
 
-    TYPE_LABELS = ["Triangle", "Pentagon", "Circle"]
-    SIZE_LABELS = ["Small", "Medium", "Large"]
-    COLOR_LABELS = ["White", "Gray", "Black"]
+    TYPE_LABELS = ["Triangle", "Square", "Pentagon", "Hexagon"]
+    SIZE_LABELS = ["Small", "Medium-S", "Medium-L", "Large"]
+    COLOR_LABELS = ["White", "Gray-W", "Gray-B", "Black"]
 
     dataset = RAVEN_Dataset(
-        base_path="data/RAVEN-3x3x3",
+        base_path="data/RAVEN-4x4x4",
         config="center_single",
         split="train",
     )
@@ -235,8 +228,8 @@ if __name__ == "__main__":
         ax.axis("off")
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig("raven_3x3x3_samples.png", dpi=150, bbox_inches="tight")
-    print("Saved raven_3x3x3_samples.png")
+    plt.savefig("raven_samples.png", dpi=150, bbox_inches="tight")
+    print("Saved raven_samples.png")
     plt.show()
 
     # ── Fig 2: Attribute distributions ───────────────────────────────
@@ -252,19 +245,26 @@ if __name__ == "__main__":
         size_counts.update(concepts[:8, 1].tolist())
         color_counts.update(concepts[:8, 2].tolist())
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    # ── Detect n_vals from the data ──────────────────────────────
+    n_type = max(type_counts.keys()) + 1 if type_counts else 3
+    n_size = max(size_counts.keys()) + 1 if size_counts else 3
+    n_color = max(color_counts.keys()) + 1 if color_counts else 3
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     fig.suptitle(f"Attribute Distributions  (first {n_check} samples, context panels)",
                  fontsize=13, fontweight="bold")
 
-    bar_colors = ["#4C72B0", "#55A868", "#C44E52"]
+    bar_colors = ["#4C72B0", "#55A868", "#C44E52", "#DD8452", "#937860"]
 
-    for ax, counts, labels, name in [
-        (axes[0], type_counts, TYPE_LABELS, "Type"),
-        (axes[1], size_counts, SIZE_LABELS, "Size"),
-        (axes[2], color_counts, COLOR_LABELS, "Color"),
+    for ax, counts, n_vals, name in [
+        (axes[0], type_counts, n_type, "Type"),
+        (axes[1], size_counts, n_size, "Size"),
+        (axes[2], color_counts, n_color, "Color"),
     ]:
-        vals = [counts.get(i, 0) for i in range(3)]
-        bars = ax.bar(labels, vals, color=bar_colors, edgecolor="black", linewidth=0.5)
+        labels = [str(i) for i in range(n_vals)]
+        vals = [counts.get(i, 0) for i in range(n_vals)]
+        colors = bar_colors[:n_vals]
+        bars = ax.bar(labels, vals, color=colors, edgecolor="black", linewidth=0.5)
         ax.set_title(name, fontsize=12, fontweight="bold")
         ax.set_ylabel("Count")
         for bar, v in zip(bars, vals):
@@ -272,6 +272,6 @@ if __name__ == "__main__":
                     str(v), ha="center", va="bottom", fontsize=9)
 
     plt.tight_layout()
-    plt.savefig("raven_3x3x3_distributions_test.png", dpi=150, bbox_inches="tight")
-    print("Saved raven_3x3x3_distributions_test.png")
+    plt.savefig("raven_distributions.png", dpi=150, bbox_inches="tight")
+    print("Saved raven_distributions.png")
     plt.show()
