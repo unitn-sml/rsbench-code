@@ -239,14 +239,15 @@ def evaluate_metrics(
 
             p_cs_all = pc_pred
 
-            # Current RavenDPL uses Type(3), Size(3), Color(3)
-            ptype = pc_pred[..., 0:3].argmax(axis=-1)
-            psize = pc_pred[..., 3:6].argmax(axis=-1)
-            pcolor = pc_pred[..., 6:9].argmax(axis=-1)
+            # Derive per-attribute dimension from the tensor shape itself.
+            n = pc_pred.shape[-1] // 3  # values per attribute (3 or 4)
+            ptype = pc_pred[..., 0:n].argmax(axis=-1)
+            psize = pc_pred[..., n:2*n].argmax(axis=-1)
+            pcolor = pc_pred[..., 2*n:3*n].argmax(axis=-1)
 
-            ctype_max = pc_pred[..., 0:3].max(axis=-1)
-            csize_max = pc_pred[..., 3:6].max(axis=-1)
-            ccolor_max = pc_pred[..., 6:9].max(axis=-1)
+            ctype_max = pc_pred[..., 0:n].max(axis=-1)
+            csize_max = pc_pred[..., n:2*n].max(axis=-1)
+            ccolor_max = pc_pred[..., 2*n:3*n].max(axis=-1)
 
             cs = np.stack([ptype, psize, pcolor], axis=-1)
             p_cs = np.stack([ctype_max, csize_max, ccolor_max], axis=-1)
@@ -1335,7 +1336,7 @@ def world_accuracy(world_prob: ndarray, world_true: ndarray, n_concepts: int):
     return get_accuracy_and_counter(n_world, world_pred, world_true, True)
 
 
-def raven_joint_concept_collapse(c_true, c_pred, n_vals=3):
+def raven_joint_concept_collapse(c_true, c_pred, n_vals=None):
     """Joint concept collapse over the (Type, Size, Color) product space.
 
     Encodes (T,S,C) as code = T*n_vals^2 + S*n_vals + C, computes a
@@ -1345,7 +1346,7 @@ def raven_joint_concept_collapse(c_true, c_pred, n_vals=3):
     Args:
         c_true: (N, 3) integer array, columns = [Type, Size, Color]
         c_pred: (N, 3) integer array, same layout
-        n_vals: cardinality per attribute (3 for 3x3x3)
+        n_vals: cardinality per attribute. Auto-detected from data if None.
 
     Returns:
         collapse: float in [0, 1]
@@ -1353,6 +1354,9 @@ def raven_joint_concept_collapse(c_true, c_pred, n_vals=3):
     """
     c_true = np.asarray(c_true)
     c_pred = np.asarray(c_pred)
+
+    if n_vals is None:
+        n_vals = int(max(c_true.max(), c_pred.max())) + 1
 
     assert c_true.shape[1] == 3, f"Expected (N, 3) with columns [Type, Size, Color]; got {c_true.shape}"
 
@@ -1374,27 +1378,26 @@ def raven_joint_concept_collapse(c_true, c_pred, n_vals=3):
     return 1.0 - coverage, cm
 
 
-def raven_pairwise_joint_collapse(c_true, c_pred, n_vals=3):
+def raven_pairwise_joint_collapse(c_true, c_pred, n_vals=None):
     """Pairwise joint concept collapse for all attribute pairs.
 
-    Computes three 9x9 confusion matrices (TypexSize, TypexColor,
-    SizexColor) by encoding each pair as code = first * n_vals + second,
-    then computing collapse = 1 - coverage on the full (n_vals^2)x(n_vals^2) grid.
+    Computes three (n_vals^2) x (n_vals^2) confusion matrices (TypexSize,
+    TypexColor, SizexColor) and returns collapse = 1 - coverage for each.
 
     Args:
         c_true: (N, 3) integer array, columns = [Type, Size, Color]
         c_pred: (N, 3) integer array, same layout
-        n_vals: cardinality per attribute (3 for 3x3x3)
+        n_vals: cardinality per attribute. Auto-detected from data if None.
 
     Returns:
-        dict mapping pair name to (collapse, cm) tuples:
-            "TypexSize": (collapse_ts, cm_ts),
-            "TypexColor": (collapse_tc, cm_tc),
-            "SizexColor": (collapse_sc, cm_sc),
+        dict mapping pair name to (collapse, cm) tuples
     """
     c_true = np.asarray(c_true)
     c_pred = np.asarray(c_pred)
     assert c_true.shape[1] == 3, f"Expected (N, 3); got {c_true.shape}"
+
+    if n_vals is None:
+        n_vals = int(max(c_true.max(), c_pred.max())) + 1
 
     valid = (c_true >= 0).all(axis=1) & (c_true < n_vals).all(axis=1)
     c_true = c_true[valid]
@@ -1414,12 +1417,14 @@ def raven_pairwise_joint_collapse(c_true, c_pred, n_vals=3):
     return result
 
 
-def plot_raven_pairwise_confusion_matrix(cm, attr_i, attr_j, n_vals=3, save_path=None):
-    """Plot a 9x9 pairwise joint confusion matrix."""
+def plot_raven_pairwise_confusion_matrix(cm, attr_i, attr_j, n_vals=None, save_path=None):
+    """Plot a pairwise joint confusion matrix."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    if n_vals is None:
+        n_vals = int(round(cm.shape[0] ** 0.5))
     n = n_vals ** 2
     assert cm.shape == (n, n), f"Expected ({n},{n}), got {cm.shape}"
 
@@ -1458,12 +1463,14 @@ def plot_raven_pairwise_confusion_matrix(cm, attr_i, attr_j, n_vals=3, save_path
     plt.close()
 
 
-def plot_raven_joint_confusion_matrix(cm, n_vals=3, save_path=None, title="Joint concept confusion (T,S,C)"):
+def plot_raven_joint_confusion_matrix(cm, n_vals=None, save_path=None, title="Joint concept confusion (T,S,C)"):
     """Plot the full-grid joint (Type, Size, Color) confusion matrix."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    if n_vals is None:
+        n_vals = int(round(cm.shape[0] ** (1/3)))
     n = n_vals ** 3
     assert cm.shape == (n, n), f"Expected ({n},{n}), got {cm.shape}"
 
@@ -1513,12 +1520,13 @@ def RAVEN_eval_tloss_cacc_acc(out_dict, concepts, cf1=False):
         f1:     label macro F1 (%)
         cf1:    mean concept macro F1 across attributes (%), only if cf1=True
     """
-    pCs = out_dict["pCS"]  # [B, 16, 9]
+    pCs = out_dict["pCS"]  # [B, 16, n_facts]
+    n = pCs.shape[-1] // 3  # values per attribute
 
-    # Type(0:3), Size(3:6), Color(6:9)
-    ptype = pCs[..., 0:3].argmax(dim=-1)
-    psize = pCs[..., 3:6].argmax(dim=-1)
-    pcolor = pCs[..., 6:9].argmax(dim=-1)
+    # Type(0:n), Size(n:2n), Color(2n:3n)
+    ptype = pCs[..., 0:n].argmax(dim=-1)
+    psize = pCs[..., n:2*n].argmax(dim=-1)
+    pcolor = pCs[..., 2*n:3*n].argmax(dim=-1)
 
     g_type = concepts[..., 0]
     g_size = concepts[..., 1]
