@@ -48,6 +48,13 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         default="center_single",
         help="RAVEN configuration (e.g. center_single)",
     )
+    parser.add_argument(
+        "--n_values",
+        type=int,
+        choices=[3, 4],
+        default=3,
+        help="Number of values per RAVEN attribute.",
+    )
     # model settings
     parser.add_argument(
         "--model",
