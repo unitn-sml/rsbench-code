@@ -186,3 +186,36 @@ class MNMATH_DPL(torch.nn.Module):
         """
         loss, losses = self.base_loss(out_dict, args)
         return loss, losses
+    
+
+class RAVEN_DPL(torch.nn.Module):
+    """RAVEN DPL loss"""
+    def __init__(self, loss, nr_classes=8) -> None:
+        """Initialize method
+
+        Args:
+            self: instance
+            loss: loss function
+            nr_classes: number of classes
+
+        Returns:
+            None: This function does not return a value.
+        """
+        super().__init__()
+        self.base_loss = loss
+        self.nr_classes = nr_classes
+
+    def forward(self, out_dict, args):
+        """Forward method
+
+        Args:
+            self: instance
+            out_dict: output dictionary
+            args: command line arguments
+
+        Returns:
+            loss: loss value
+            losses: losses dictionary
+        """
+        loss, losses = self.base_loss(out_dict, args)
+        return loss, losses

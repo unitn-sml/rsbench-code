@@ -67,6 +67,86 @@ In this setting, which is the same as the one presented in [Marconato et al. (20
 
 ![Kandinsky pattern illustration](.github/kand-illustration.png)
 
+## RAVEN
+
+This branch adds a reasoning-shortcut task based on the RAVEN dataset,
+introduced by [Zhang et al. (2019)](https://arxiv.org/abs/1903.02741). RAVEN is
+a computer-vision dataset inspired by John C. Raven's original 1938 Raven's
+Progressive Matrices (RPM) test, a non-verbal assessment of abstract reasoning.
+The dataset name is an homage to Raven; its purpose is to evaluate structural,
+relational, and analogical visual reasoning.
+
+An RPM problem contains a 3 by 3 matrix of grayscale panels: the first eight
+panels form the context, the bottom-right panel is missing, and the model must
+select the candidate that completes the matrix. Each RAVEN problem therefore
+contains 16 panels: eight context panels and eight answer candidates, with a
+target index from `0` through `7`.
+
+![Example RAVEN matrix and answer candidates](.github/raven-example.png)
+
+*Example from [Zhang et al.'s RAVEN paper](https://openaccess.thecvf.com/content_CVPR_2019/html/Zhang_RAVEN_A_Dataset_for_Relational_and_Analogical_Visual_REasoNing_CVPR_2019_paper.html): the upper matrix is the context and the lower panels are the answer candidates.*
+
+The current implementation supports the reduced `center_single`
+configuration. Every panel contains one centered object, and the model reasons
+over three rule-governed attributes: **Type**, **Size**, and **Color**.
+`ravendpl` combines a shared panel encoder with factorized DeepProbLog
+reasoning, scoring the candidate that is consistent with the rules inferred
+from the first two rows.
+
+### Dataset layout
+
+RAVEN data is not included in the repository. The reduced datasets are
+generated with a modified RAVEN generator, available at
+[jucamohedano/RAVEN](https://github.com/jucamohedano/RAVEN) (a fork of
+[WellyZhang/RAVEN](https://github.com/WellyZhang/RAVEN)):
+
+- branch [`raven-3x3x3`](https://github.com/jucamohedano/RAVEN/tree/raven-3x3x3)
+  (commit `65c6ba9`) for the three-value dataset;
+- branch [`raven-4x4x4`](https://github.com/jucamohedano/RAVEN/tree/raven-4x4x4)
+  (commit `8fd5eb8`) for the four-value dataset.
+
+Each branch README documents the reduced attribute domains. From the desired
+branch, generate the dataset with the generator's Python 2.7 environment:
+
+```sh
+python src/dataset/main.py --num-samples 5000 --save-dir <output>/RAVEN-3x3x3
+```
+
+The defaults (`--val 2 --test 2 --seed 1234`) produce a 6:2:2 split of
+3000 train / 1000 val / 1000 test samples. Use `--save-dir
+<output>/RAVEN-4x4x4` on the `raven-4x4x4` branch for the four-value
+dataset. Then place the generated `.npz` panel data and matching `.xml`
+metadata files under `rss/data`. The default three-value dataset is expected at:
+
+```text
+rss/data/RAVEN-3x3x3/center_single/
+  RAVEN_*_train.npz
+  RAVEN_*_train.xml
+  RAVEN_*_val.npz
+  RAVEN_*_val.xml
+  RAVEN_*_test.npz
+  RAVEN_*_test.xml
+```
+
+The implementation also supports a four-value-per-attribute dataset in
+`RAVEN-4x4x4`. Select it with `--n_values 4`; the documented command below
+uses the default 3x3x3 setting.
+
+### Train RavenDPL
+
+From the `rss` directory, train the default RAVEN-3x3x3 task with:
+
+```sh
+python main.py --dataset raven --model ravendpl --task raven \
+  --raven_config center_single --n_epochs 100 --batch_size 32 \
+  --lr 0.0001 --weight_decay 0.00001 --entropy --w_h 0.1 \
+  --c_sup 0 --seed 123 --output_dir ../outputs/raven-3x3x3-seed-123
+```
+
+`--c_sup` controls the fraction of training samples with concept labels, while
+`--which_c` selects the modeled attributes to supervise: `0` for Type, `1` for
+Size, and `2` for Color. Use `--which_c -1` to supervise all three attributes.
+
 ## Structure of the code
 
 * The code structure is similar to [Marconato et al. (2024) bears](https://github.com/samuelebortolotti/bears):

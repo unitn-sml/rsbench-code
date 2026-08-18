@@ -8,7 +8,7 @@ from typing import Tuple, Dict, List
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 from scipy.special import softmax
 
 
@@ -193,7 +193,11 @@ def evaluate_metrics(
             "mnmath",
         ]:
             loss, ac, acc, f1 = MNMATH_eval_tloss_cacc_acc(out_dict, concepts)
+        elif args.dataset == "raven":
+            loss, ac, acc, f1, rcf1 = RAVEN_eval_tloss_cacc_acc(out_dict, concepts, cf1=True)
+            fcf1 += rcf1
         else:
+            print(f"Metrics not implemented for dataset: {args.dataset}")
             NotImplementedError()
 
         if not last:
@@ -228,6 +232,27 @@ def evaluate_metrics(
             cs = np.split(c_pred, c_pred.shape[1], axis=1)
             p_cs = np.split(pc_pred, pc_pred.shape[1], axis=1)
             p_ys = y_pred
+        elif args.dataset == "raven":
+            # YS: [Batch, 8] -> [Batch] (candidate index)
+            y_true = y_true.astype(int).reshape(-1)
+            ys = np.argmax(y_pred, axis=1).astype(int).reshape(-1)
+
+            p_cs_all = pc_pred
+
+            # Derive per-attribute dimension from the tensor shape itself.
+            n = pc_pred.shape[-1] // 3  # values per attribute (3 or 4)
+            ptype = pc_pred[..., 0:n].argmax(axis=-1)
+            psize = pc_pred[..., n:2*n].argmax(axis=-1)
+            pcolor = pc_pred[..., 2*n:3*n].argmax(axis=-1)
+
+            ctype_max = pc_pred[..., 0:n].max(axis=-1)
+            csize_max = pc_pred[..., n:2*n].max(axis=-1)
+            ccolor_max = pc_pred[..., 2*n:3*n].max(axis=-1)
+
+            cs = np.stack([ptype, psize, pcolor], axis=-1)
+            p_cs = np.stack([ctype_max, csize_max, ccolor_max], axis=-1)
+            gs = c_true[..., :3]
+            p_ys = y_pred.max(axis=1)
         else:
             ys = np.argmax(y_pred, axis=1)
 
@@ -236,7 +261,12 @@ def evaluate_metrics(
             p_cs = np.split(pc_pred, pc_pred.shape[1], axis=1)
             p_ys = y_pred
 
-        p_cs_all = p_cs
+        # For RAVEN, p_cs_all must remain the full concept-probability tensor
+        # [N, 16, 9] = [Type(3) | Size(3) | Color(3)] per panel.
+        # Do not overwrite it with p_cs, which only stores max confidences
+        # [N, 16, 3]. Other datasets keep the historical behavior.
+        if args.dataset != "raven":
+            p_cs_all = p_cs
         p_ys_all = y_pred
 
         assert len(gs) == len(cs), f"gs: {gs.shape}, cs: {cs.shape}"
@@ -247,6 +277,7 @@ def evaluate_metrics(
             "presddoia",
             "clipboia",
             "clipsddoia",
+            "raven",
         ]:
             gs = np.concatenate(gs, axis=0).squeeze(1)
         if args.dataset in [
@@ -257,6 +288,8 @@ def evaluate_metrics(
             "clipsddoia",
         ]:
             cs = (cs >= 0.5).astype(np.int)
+        elif args.dataset == "raven":
+            pass
         elif args.dataset not in [
             "kandinsky",
             "prekandinsky",
@@ -288,6 +321,7 @@ def evaluate_metrics(
             "presddoia",
             "clipboia",
             "clipsddoia",
+            "raven",
         ]:
             p_cs_all = np.concatenate(p_cs_all, axis=0).squeeze(
                 1
@@ -321,6 +355,7 @@ def evaluate_metrics(
             "restrictedmnist",
             "clipsddoia",
             "clipshortmnist",
+            "raven",
         ]:
             if cf1:
                 return tloss / L, cacc / L, yacc / L, f1sc / L, fcf1 / L
@@ -1299,3 +1334,237 @@ def world_accuracy(world_prob: ndarray, world_true: ndarray, n_concepts: int):
     ).astype(int)
 
     return get_accuracy_and_counter(n_world, world_pred, world_true, True)
+
+
+def raven_joint_concept_collapse(c_true, c_pred, n_vals=None):
+    """Joint concept collapse over the (Type, Size, Color) product space.
+
+    Encodes (T,S,C) as code = T*n_vals^2 + S*n_vals + C, computes a
+    full-grid (n_vals^3 x n_vals^3) confusion matrix, and returns
+    1 - coverage (higher = more collapse) and the matrix itself.
+
+    Args:
+        c_true: (N, 3) integer array, columns = [Type, Size, Color]
+        c_pred: (N, 3) integer array, same layout
+        n_vals: cardinality per attribute. Auto-detected from data if None.
+
+    Returns:
+        collapse: float in [0, 1]
+        cm: (n_vals^3, n_vals^3) confusion matrix
+    """
+    c_true = np.asarray(c_true)
+    c_pred = np.asarray(c_pred)
+
+    if n_vals is None:
+        n_vals = int(max(c_true.max(), c_pred.max())) + 1
+
+    assert c_true.shape[1] == 3, f"Expected (N, 3) with columns [Type, Size, Color]; got {c_true.shape}"
+
+    # Drop rows where any ground-truth attribute is masked (-1).
+    # Without this, -1 values produce negative codes that confusion_matrix
+    # silently drops, losing data without warning.
+    valid = (c_true >= 0).all(axis=1) & (c_true < n_vals).all(axis=1)
+    c_true = c_true[valid]
+    c_pred = c_pred[valid]
+
+    code_t = c_true[:, 0] * n_vals ** 2 + c_true[:, 1] * n_vals + c_true[:, 2]
+    code_p = c_pred[:, 0] * n_vals ** 2 + c_pred[:, 1] * n_vals + c_pred[:, 2]
+
+    labels = list(range(n_vals ** 3))
+    cm = confusion_matrix(code_t, code_p, labels=labels)
+
+    max_per_col = np.max(cm, axis=0)
+    coverage = np.sum(np.clip(max_per_col, 0, 1)) / len(max_per_col)
+    return 1.0 - coverage, cm
+
+
+def raven_pairwise_joint_collapse(c_true, c_pred, n_vals=None):
+    """Pairwise joint concept collapse for all attribute pairs.
+
+    Computes three (n_vals^2) x (n_vals^2) confusion matrices (TypexSize,
+    TypexColor, SizexColor) and returns collapse = 1 - coverage for each.
+
+    Args:
+        c_true: (N, 3) integer array, columns = [Type, Size, Color]
+        c_pred: (N, 3) integer array, same layout
+        n_vals: cardinality per attribute. Auto-detected from data if None.
+
+    Returns:
+        dict mapping pair name to (collapse, cm) tuples
+    """
+    c_true = np.asarray(c_true)
+    c_pred = np.asarray(c_pred)
+    assert c_true.shape[1] == 3, f"Expected (N, 3); got {c_true.shape}"
+
+    if n_vals is None:
+        n_vals = int(max(c_true.max(), c_pred.max())) + 1
+
+    valid = (c_true >= 0).all(axis=1) & (c_true < n_vals).all(axis=1)
+    c_true = c_true[valid]
+    c_pred = c_pred[valid]
+
+    pairs = [(0, 1, "TypexSize"), (0, 2, "TypexColor"), (1, 2, "SizexColor")]
+    n2 = n_vals ** 2
+    labels = list(range(n2))
+    result = {}
+    for i, j, name in pairs:
+        code_t = c_true[:, i] * n_vals + c_true[:, j]
+        code_p = c_pred[:, i] * n_vals + c_pred[:, j]
+        cm = confusion_matrix(code_t, code_p, labels=labels)
+        max_per_col = np.max(cm, axis=0)
+        coverage = np.sum(np.clip(max_per_col, 0, 1)) / len(max_per_col)
+        result[name] = (1.0 - coverage, cm)
+    return result
+
+
+def plot_raven_pairwise_confusion_matrix(cm, attr_i, attr_j, n_vals=None, save_path=None):
+    """Plot a pairwise joint confusion matrix."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if n_vals is None:
+        n_vals = int(round(cm.shape[0] ** 0.5))
+    n = n_vals ** 2
+    assert cm.shape == (n, n), f"Expected ({n},{n}), got {cm.shape}"
+
+    attr_names = ["T", "S", "C"]
+    tick_labels = [f"{attr_names[attr_i]}{c // n_vals}{attr_names[attr_j]}{c % n_vals}" for c in range(n)]
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    im = ax.imshow(cm + 1e-6, interpolation="nearest", cmap=plt.cm.Blues,
+                   norm=matplotlib.colors.LogNorm())
+    ax.set_title(f"Joint confusion: {attr_names[attr_i]}x{attr_names[attr_j]}")
+    fig.colorbar(im, ax=ax)
+
+    ax.set_xticks(np.arange(n))
+    ax.set_yticks(np.arange(n))
+    ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
+    ax.set_yticklabels(tick_labels, fontsize=9)
+    ax.set_xlabel(f"Predicted ({attr_names[attr_i]},{attr_names[attr_j]})")
+    ax.set_ylabel(f"True ({attr_names[attr_i]},{attr_names[attr_j]})")
+
+    ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="lightgray", linestyle="-", linewidth=0.3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    # Annotate cells with counts
+    for i in range(n):
+        for j in range(n):
+            val = cm[i, j]
+            if val > 0:
+                ax.text(j, i, str(int(val)), ha="center", va="center",
+                        fontsize=7, color="white" if val > cm.max() / 2 else "black")
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close()
+
+
+def plot_raven_joint_confusion_matrix(cm, n_vals=None, save_path=None, title="Joint concept confusion (T,S,C)"):
+    """Plot the full-grid joint (Type, Size, Color) confusion matrix."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if n_vals is None:
+        n_vals = int(round(cm.shape[0] ** (1/3)))
+    n = n_vals ** 3
+    assert cm.shape == (n, n), f"Expected ({n},{n}), got {cm.shape}"
+
+    tick_labels = [
+        f"T{c // n_vals**2}S{(c // n_vals) % n_vals}C{c % n_vals}"
+        for c in range(n)
+    ]
+
+    fig, ax = plt.subplots(figsize=(14, 12))
+    im = ax.imshow(cm + 1e-6, interpolation="nearest", cmap=plt.cm.Blues,
+                   norm=matplotlib.colors.LogNorm())
+    ax.set_title(title)
+    fig.colorbar(im, ax=ax)
+
+    ax.set_xticks(np.arange(n))
+    ax.set_yticks(np.arange(n))
+    ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
+    ax.set_yticklabels(tick_labels, fontsize=7)
+    ax.set_xlabel("Predicted (T,S,C)")
+    ax.set_ylabel("True (T,S,C)")
+
+    ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="lightgray", linestyle="-", linewidth=0.3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close()
+
+
+def RAVEN_eval_tloss_cacc_acc(out_dict, concepts, cf1=False):
+    """RAVEN evaluation for the current 3x3x3 factorized setup.
+
+    Per-attribute concept accuracy and F1, plus label accuracy and F1.
+
+    Args:
+        out_dict: dictionary of model outputs
+        concepts: ground-truth concept tensor
+        cf1: if True, also return concept macro F1 as 5th value
+
+    Returns:
+        loss:   NLL loss on answer prediction
+        cacc:   mean concept accuracy across attributes (%)
+        acc:    label accuracy (%)
+        f1:     label macro F1 (%)
+        cf1:    mean concept macro F1 across attributes (%), only if cf1=True
+    """
+    pCs = out_dict["pCS"]  # [B, 16, n_facts]
+    n = pCs.shape[-1] // 3  # values per attribute
+
+    # Type(0:n), Size(n:2n), Color(2n:3n)
+    ptype = pCs[..., 0:n].argmax(dim=-1)
+    psize = pCs[..., n:2*n].argmax(dim=-1)
+    pcolor = pCs[..., 2*n:3*n].argmax(dim=-1)
+
+    g_type = concepts[..., 0]
+    g_size = concepts[..., 1]
+    g_color = concepts[..., 2]
+
+    # Flatten panels before metric computation. If concept supervision masks
+    # are present, ignore masked slots (-1).
+    pred_attrs = [ptype.reshape(-1), psize.reshape(-1), pcolor.reshape(-1)]
+    true_attrs = [g_type.reshape(-1), g_size.reshape(-1), g_color.reshape(-1)]
+
+    accs, f1s = [], []
+    for y_true, y_pred in zip(true_attrs, pred_attrs):
+        mask = y_true != -1
+        y_true = y_true[mask]
+        y_pred = y_pred[mask]
+        accs.append((y_pred == y_true).float().mean().item())
+        f1s.append(
+            f1_score(
+                y_true.detach().cpu().numpy(),
+                y_pred.detach().cpu().numpy(),
+                average="macro",
+            )
+        )
+
+    cacc = float(np.mean(accs)) * 100.0
+    rcf1 = float(np.mean(f1s)) * 100.0
+
+    ys = out_dict["YS"]
+    labels = out_dict["LABELS"]
+    preds = ys.argmax(dim=-1)
+    acc = (preds == labels).float().mean().item() * 100.0
+    f1 = f1_score(labels.cpu().numpy(), preds.cpu().numpy(), average="macro") * 100.0
+
+    # Real evaluation loss for the answer prediction.
+    # ys is already log-probabilities (log_softmax), so NLL applies directly.
+    loss = F.nll_loss(ys, labels.to(torch.long), reduction="mean")
+
+    if cf1:
+        return loss, cacc, acc, f1, rcf1
+    else:
+        return loss, cacc, acc, f1

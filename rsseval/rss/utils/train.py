@@ -18,14 +18,20 @@ from utils.metrics import (
     evaluate_mix,
     mean_entropy,
     accuracy_binary,
+    raven_joint_concept_collapse,
+    plot_raven_joint_confusion_matrix,
+    raven_pairwise_joint_collapse,
+    plot_raven_pairwise_confusion_matrix,
 )
 from utils.generative import conditional_gen, recon_visaulization
 from utils import fprint
 import matplotlib.pyplot as plt
 
 from warmup_scheduler import GradualWarmupScheduler
-from sklearn.metrics import multilabel_confusion_matrix, confusion_matrix
-import numpy as np
+from sklearn.metrics import (
+    multilabel_confusion_matrix,
+    confusion_matrix,
+)
 
 
 def convert_to_categories(elements):
@@ -285,6 +291,13 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
     elif "mnmath" in dataset:
         cs = torch.argmax(cs, dim=2)
         cs_true = cs_true.reshape(cs_true.size(0), cs_true.size(1) * cs_true.size(2))
+    elif "raven" in dataset:
+        if y_true.dim() == 1:
+            y_true = y_true.unsqueeze(1)
+        if cs.dim() > 2:
+            cs = cs.reshape(cs.shape[0], -1)
+        if cs_true.dim() > 2:
+            cs_true = cs_true.reshape(cs_true.shape[0], -1)
 
     concatenated_tensor = (
         torch.concatenate((ys, y_true, cs, cs_true), dim=1).cpu().detach().numpy()
@@ -311,11 +324,21 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         None: This function does not return a value.
     """
 
+    output_dir = getattr(args, "output_dir", ".") or "."
+    os.makedirs(output_dir, exist_ok=True)
+
+    def out_path(name):
+        return os.path.join(output_dir, name)
+
     # name
-    csv_name = f"{args.dataset}-{args.model}-lr-{args.lr}.csv"
+    csv_name = out_path(f"{args.dataset}-{args.model}-lr-{args.lr}.csv")
 
     # best f1
     best_f1 = 0.0
+    best_tloss = float("inf")
+    early_stop_wait = 0
+    early_stop_patience = int(getattr(args, "early_stop_patience", -1))
+    early_stop_min_delta = float(getattr(args, "early_stop_min_delta", 0.0))
 
     to_add = ""
     if args.model in ["kandcbm", "sddoiacbm", "boiacbm", "mnistcbm"]:
@@ -324,7 +347,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     if args.dataset in ["shortmnist"] and args.joint:
         to_add += "_joint"
 
-    save_path = f"best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
+    save_path = out_path(f"best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth")
 
     # save embeddings variable
     save_embeddings_flag = False
@@ -352,7 +375,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         wandb.init(
             project=args.project,
             entity=args.wandb,
-            name=str(args.dataset) + "_" + str(args.model),
+            name=getattr(args, 'run_name', f"{args.dataset}_{args.model}"),
             config=args,
         )
 
@@ -368,6 +391,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         conc_sup = dataset.get_sup()
 
     for epoch in range(args.n_epochs):
+        args._current_epoch = epoch
         model.train()
 
         ys, y_true, cs, cs_true = None, None, None, None
@@ -500,6 +524,22 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 lr=float(scheduler.get_last_lr()[0]),
             )
 
+        # Early stopping based on validation loss.
+        if early_stop_patience > 0:
+            current_tloss = float(tloss)
+            if (best_tloss - current_tloss) > early_stop_min_delta:
+                best_tloss = current_tloss
+                early_stop_wait = 0
+            else:
+                early_stop_wait += 1
+                if early_stop_wait >= early_stop_patience:
+                    print(
+                        f"Early stopping at epoch {epoch}: "
+                        f"val loss did not improve for {early_stop_patience} epochs "
+                        f"(best={best_tloss:.6f}, current={current_tloss:.6f})."
+                    )
+                    break
+
     if args.dataset in ["clipshortmnist", "shortmnist"]:
         pass
     elif not args.tuning:
@@ -550,13 +590,13 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             ]
 
             plot_multilabel_confusion_matrix(
-                y_true, y_pred, y_labels, "Labels", save_path="labels.png"
+                y_true, y_pred, y_labels, "Labels", save_path=out_path("labels.png")
             )
             cfs = plot_actions_confusion_matrix(
-                c_true, c_pred, "Concepts", save_path="total_concepts_"
+                c_true, c_pred, "Concepts", save_path=out_path("total_concepts_")
             )
             cf = plot_multilabel_confusion_matrix(
-                c_true, c_pred, concept_labels, "Concepts", save_path="total_concepts"
+                c_true, c_pred, concept_labels, "Concepts", save_path=out_path("total_concepts")
             )
 
             print("Concept collapse", 1 - compute_coverage(cf))
@@ -570,17 +610,65 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 ["{i}" for i in range(10) for _ in range(4)] 
             ]
             plot_multilabel_confusion_matrix(
-                y_true, y_pred, y_labels, "Labels", save_path="labels.png"
+                y_true, y_pred, y_labels, "Labels", save_path=out_path("labels.png")
             )
             cf = plot_confusion_matrix(
                 c_true,
                 c_pred,
                 labels=dataset.get_concept_labels(),
                 title="Concepts",
-                save_path=f"concepts_{args.dataset}_{args.model}_lr_{args.lr}.png",
+                save_path=out_path(f"concepts_{args.dataset}_{args.model}_lr_{args.lr}.png"),
             )
 
             print("Concept collapse", 1 - compute_coverage(cf))
+        elif args.task == "raven":
+            plot_confusion_matrix(
+                y_true,
+                y_pred,
+                labels=dataset.get_labels(),
+                title="Labels",
+                save_path=out_path(f"labels_{args.dataset}_{args.model}_lr_{args.lr}.png"),
+            )
+
+            concept_names, concept_values = dataset.get_concept_labels()
+
+            # Flatten [Batch, 16, Attr] -> [Total_Panels, Attr]
+            c_true_flat = c_true.reshape(-1, c_true.shape[-1])
+            c_pred_flat = c_pred.reshape(-1, c_pred.shape[-1])
+
+            for i in range(c_pred_flat.shape[1]):
+                attr_name = concept_names[i]
+                attr_labels = concept_values[i]
+                plot_confusion_matrix(
+                    c_true_flat[:, i],
+                    c_pred_flat[:, i],
+                    labels=attr_labels,
+                    title=f"Concepts - {attr_name}",
+                    save_path=out_path(f"concepts_{attr_name}_{args.dataset}_{args.model}_lr_{args.lr}.png"),
+                )
+                cf_attr=confusion_matrix(c_true_flat[:, i], c_pred_flat[:, i], labels=list(range(len(attr_labels))))
+                print(f"Concept collapse {attr_name}", 1 - compute_coverage(cf_attr))
+
+            # Joint (Type, Size, Color) concept collapse
+            joint_collapse, joint_cm = raven_joint_concept_collapse(c_true_flat, c_pred_flat)
+            n = int(round(joint_cm.shape[0] ** (1/3)))  # derive n_vals from matrix size
+            print(f"Joint concept collapse ({n**3}-class): {joint_collapse:.4f}")
+            plot_raven_joint_confusion_matrix(
+                joint_cm,
+                save_path=out_path(f"joint_concepts_{args.dataset}_{args.model}_lr_{args.lr}.png"),
+            )
+
+            # Pairwise joint collapse
+            pairwise = raven_pairwise_joint_collapse(c_true_flat, c_pred_flat)
+            pair_idx = {"TypexSize": (0, 1), "TypexColor": (0, 2), "SizexColor": (1, 2)}
+            for pair_name, (clp, cm) in pairwise.items():
+                i, j = pair_idx[pair_name]
+                safe_name = pair_name.replace("×", "x")
+                print(f"Pairwise collapse {pair_name} (9-class): {clp:.4f}")
+                plot_raven_pairwise_confusion_matrix(
+                    cm, i, j,
+                    save_path=out_path(f"pairwise_{safe_name}_{args.dataset}_{args.model}_lr_{args.lr}.png"),
+                )
         else:
 
             if args.task in ["patterns", "mini_patterns"]:
@@ -592,7 +680,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 y_pred,
                 labels=dataset.get_labels(),
                 title="Labels",
-                save_path=f"labels_{args.dataset}_{args.model}_lr_{args.lr}.png",
+                save_path=out_path(f"labels_{args.dataset}_{args.model}_lr_{args.lr}.png"),
             )
 
             if args.task in ["patterns", "mini_patterns"]:
@@ -608,7 +696,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                     p_shapes,
                     labels=shapes_concepts,
                     title="Concepts",
-                    save_path=f"concepts_{args.dataset}_{args.model}_lr_{args.lr}-shapes.png",
+                    save_path=out_path(f"concepts_{args.dataset}_{args.model}_lr_{args.lr}-shapes.png"),
                 )
                 print("Concept collapse shapes", 1 - compute_coverage(cf_shapes))
 
@@ -617,7 +705,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                     p_colors,
                     labels=colors_concepts,
                     title="Concepts",
-                    save_path=f"concepts_{args.dataset}_{args.model}_lr_{args.lr}-colors.png",
+                    save_path=out_path(f"concepts_{args.dataset}_{args.model}_lr_{args.lr}-colors.png"),
                 )
                 print("Concept collapse colors", 1 - compute_coverage(cf_colors))
 
@@ -628,7 +716,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                     c_pred,
                     labels=dataset.get_concept_labels(),
                     title="Concepts",
-                    save_path=f"concepts_{args.dataset}_{args.model}_lr_{args.lr}.png",
+                    save_path=out_path(f"concepts_{args.dataset}_{args.model}_lr_{args.lr}.png"),
                 )
 
                 print("Concept collapse", 1 - compute_coverage(cf))
@@ -654,14 +742,32 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                     ),
                 }
             )
-            K = max(np.max(c_pred), np.max(c_true))
-            wandb.log(
-                {
-                    "cf-concepts": wandb.plot.confusion_matrix(
-                        None, c_true, c_pred, class_names=[str(i) for i in range(K + 1)]
-                    ),
-                }
-            )
+
+            if args.dataset == "raven":
+                concept_names, concept_values = dataset.get_concept_labels()
+                c_true_flat = c_true.reshape(-1, c_true.shape[-1])
+                c_pred_flat = c_pred.reshape(-1, c_pred.shape[-1])
+
+                for i in range(c_pred_flat.shape[1]):
+                    wandb.log(
+                        {
+                            f"cf-concepts-{concept_names[i]}": wandb.plot.confusion_matrix(
+                                None,
+                                c_true_flat[:, i],
+                                c_pred_flat[:, i],
+                                class_names=concept_values[i],
+                            )
+                        }
+                    )
+            else:
+                K = max(np.max(c_pred), np.max(c_true))
+                wandb.log(
+                    {
+                        "cf-concepts": wandb.plot.confusion_matrix(
+                            None, c_true, c_pred, class_names=[str(i) for i in range(K + 1)]
+                        ),
+                    }
+                )
 
             if hasattr(model, "decoder"):
                 list_images = make_grid(
