@@ -5,7 +5,7 @@ import numpy as np, glob
 import re
 import json
 from datasets.utils.mnist_creation import generate_r_seq
-from datasets.utils.sddoia_creation import CONCEPTS_ORDER
+from datasets.utils.sddoia_creation import CONCEPTS_ORDER, SDDOIA_LABEL_ORDER
 
 PREFIX = "MINI_BOIA_"
 
@@ -66,7 +66,7 @@ class PreSDDOIADataset(torch.utils.data.Dataset):
             # read out the concepts
             concept_values = [int(c[key]) for key in sorted_concepts]
 
-            labels = np.array(label)
+            labels = np.array(label)[SDDOIA_LABEL_ORDER]
             self.labels.append(labels)
 
             concepts = np.array(concept_values)

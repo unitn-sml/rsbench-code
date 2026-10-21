@@ -721,7 +721,12 @@ def build_world_queries_matrix_L():
             w_q[w, 0] = 0.5
             w_q[w, 1] = 0.5
         elif left_lane + tl_green + follow > 0:
-            w_q[w, 1] = 1
+            # can turn AND NOT cannot turn, as in build_world_queries_matrix_R
+            # and in the rule SDD-OIA's labels were generated with.
+            if obs + left_solid_line + no_left_lane > 0:
+                w_q[w, 0] = 1  # not move
+            else:
+                w_q[w, 1] = 1  # move
         else:
             w_q[w, 0] = 1
     return w_q

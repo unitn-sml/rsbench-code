@@ -10,6 +10,12 @@ from torchvision.datasets.folder import pil_loader
 from datasets.utils.mnist_creation import generate_r_seq
 
 
+# Position of each concept in the concept vector. This must be the order in
+# which the knowledge reads the concepts: models/sddoiadpl.py
+# (problog_inference) and utils/boia_ltn_loss.py both take left-turn reasons
+# from 9-14 and right-turn reasons from 15-20. Previously 9-20 were rotated by
+# one group of three (no_left_lane at 9, ..., left_lane at 18), so the DPL and
+# LTN knowledge read e.g. "no lane on the left" as "there is a left lane".
 CONCEPTS_ORDER = {
     "red_light": 3,
     "green_light": 0,
@@ -19,20 +25,26 @@ CONCEPTS_ORDER = {
     "other_obstacle": 8,
     "follow": 1,
     "stop_sign": 4,
-    "left_lane": 18,
-    "left_green_light": 19,
-    "left_follow": 20,
-    "no_left_lane": 9,
-    "left_obstacle": 10,
-    "left_solid_line": 11,
-    "right_lane": 12,
-    "right_green_light": 13,
-    "right_follow": 14,
-    "no_right_lane": 15,
-    "right_obstacle": 16,
-    "right_solid_line": 17,
+    "left_lane": 9,
+    "left_green_light": 10,
+    "left_follow": 11,
+    "no_left_lane": 12,
+    "left_obstacle": 13,
+    "left_solid_line": 14,
+    "right_lane": 15,
+    "right_green_light": 16,
+    "right_follow": 17,
+    "no_right_lane": 18,
+    "right_obstacle": 19,
+    "right_solid_line": 20,
     "clear": 2,
 }
+
+# rssgen writes SDD-OIA labels as [stop, move_forward, turn_left, turn_right]
+# (rssgen/sddoia/sddoia_utils/boia_rules.py), but the models output
+# [forward, stop, left, right] (build_world_queries_matrix_FS, boia_ltn_loss),
+# which is also BDD-OIA's order. Index stored labels with this to match.
+SDDOIA_LABEL_ORDER = [1, 0, 2, 3]
 
 PREFIX = "MINI_BOIA_"
 
@@ -113,7 +125,7 @@ class SDDOIADataset(torch.utils.data.Dataset):
             # read out the concepts
             concept_values = [int(c[key]) for key in sorted_concepts]
 
-            labels = np.array(label)
+            labels = np.array(label)[SDDOIA_LABEL_ORDER]
             self.labels.append(labels)
 
             concepts = np.array(concept_values)
@@ -178,7 +190,7 @@ class SDDOIADataset(torch.utils.data.Dataset):
                 # to_insert = []
 
                 # for i in range(self.concepts.shape[0]):
-                #     if self.concepts[i, 3] or self.concepts[i, 4] or self.concepts[i, 11] or self.concepts[i, 17]:
+                #     if self.concepts[i, 3] or self.concepts[i, 4] or self.concepts[i, 14] or self.concepts[i, 20]:
                 #         to_insert.append(i)
 
                 #         if self.concepts[i, 3]:
@@ -313,7 +325,7 @@ class ClIP_SDDOIADataset(torch.utils.data.Dataset):
             # read out the concepts
             concept_values = [int(c[key]) for key in sorted_concepts]
 
-            labels = np.array(label)
+            labels = np.array(label)[SDDOIA_LABEL_ORDER]
             self.labels.append(labels)
 
             concepts = np.array(concept_values)
@@ -361,7 +373,7 @@ class ClIP_SDDOIADataset(torch.utils.data.Dataset):
                 # to_insert = []
 
                 # for i in range(self.concepts.shape[0]):
-                #     if self.concepts[i, 3] or self.concepts[i, 4] or self.concepts[i, 11] or self.concepts[i, 17]:
+                #     if self.concepts[i, 3] or self.concepts[i, 4] or self.concepts[i, 14] or self.concepts[i, 20]:
                 #         to_insert.append(i)
 
                 #         if self.concepts[i, 3]:

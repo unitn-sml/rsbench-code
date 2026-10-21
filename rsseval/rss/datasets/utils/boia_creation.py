@@ -5,6 +5,41 @@ import pickle
 from datasets.utils.mnist_creation import generate_r_seq
 from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 
+# Column order of the BDD-OIA concept files ("reason" in Xu et al., 2020). It is
+# not the order of the paper's Table 1: the action labels (e.g. P(left=1) >= .99
+# given any of columns 9-11, <= .06 given any of 15-17) and the images (column 3
+# shows a car ahead, 7 a red light, 16 a median on the left) both say it is this
+# one. Within the turn-enabling groups the order (lane, light, car in front) is
+# inferred rather than seen; it does not affect the knowledge, which ORs them.
+BOIA_FILE_ORDER = [
+    "green_light",
+    "follow",
+    "clear",
+    "car",
+    "person",
+    "rider",
+    "other_obstacle",
+    "red_light",
+    "stop_sign",
+    "left_lane",
+    "left_green_light",
+    "left_follow",
+    "right_lane",
+    "right_green_light",
+    "right_follow",
+    "left_obstacle",
+    "no_left_lane",
+    "left_solid_line",
+    "right_obstacle",
+    "no_right_lane",
+    "right_solid_line",
+]
+
+# For each position of CONCEPTS_ORDER, the BDD-OIA file column that holds it.
+BOIA_TO_CONCEPTS_ORDER = [
+    BOIA_FILE_ORDER.index(name) for name in sorted(CONCEPTS_ORDER, key=CONCEPTS_ORDER.get)
+]
+
 
 class BOIADataset(Dataset):
     """
@@ -71,6 +106,7 @@ class BOIADataset(Dataset):
         img = torch.load(img_path).squeeze(0)
         class_label = torch.load(lab_path).squeeze(0)
         attr_label = torch.load(con_path).squeeze(0)
+        attr_label = attr_label[BOIA_TO_CONCEPTS_ORDER]
 
         # assert class_label[4] == 0, class_label
         # NOTE: we are not interested in the last action
@@ -181,6 +217,7 @@ class CLIPBOIADataset(Dataset):
         img = torch.load(img_path).squeeze(0)
         class_label = torch.load(lab_path).squeeze(0)
         attr_label = torch.load(con_path).squeeze(0)
+        attr_label = attr_label[BOIA_TO_CONCEPTS_ORDER]
 
         # assert class_label[4] == 0, class_label
         # NOTE: we are not interested in the last action
