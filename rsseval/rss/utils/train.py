@@ -523,7 +523,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             fprint(f"Entropy:\n     H(C): {h_c}")
 
         if args.task == "boia":
-            y_labels = ["stop", "forward", "left", "right"]
+            y_labels = ["forward", "stop", "left", "right"]
 
             concept_labels = [
                 "green_light",
@@ -540,7 +540,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 "left_follow",
                 "no_left_lane",
                 "left_obstacle",
-                "letf_solid_line",
+                "left_solid_line",
                 "right_lane",
                 "right_green_light",
                 "right_follow",
