@@ -52,7 +52,8 @@ def get_model(args, encoder, decoder, n_images, c_split):
         "xordpl",
         "mnmathnn",
         "mnmathcbm",
-        "mnmathdpl"
+        "mnmathdpl",
+        "ravendpl"
     ]:
         return names[args.model](
             encoder, n_images=n_images, c_split=c_split, args=args
